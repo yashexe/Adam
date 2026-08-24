@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Keeps the outreach review UI running so http://127.0.0.1:8765 is just
+  there, bookmarkable, without starting anything by hand.
+
+  Install:
+      cp com.yash.outreach-ui.plist ~/Library/LaunchAgents/
+      launchctl load ~/Library/LaunchAgents/com.yash.outreach-ui.plist
+
+  Stop / uninstall:
+      launchctl unload ~/Library/LaunchAgents/com.yash.outreach-ui.plist
+
+  Reload after editing outreach_ui.py:
+      launchctl kickstart -k gui/$(id -u)/com.yash.outreach-ui
+
+  --no-open matters here: without it the agent would open a browser tab at
+  every login and on every crash restart.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.yash.outreach-ui</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/homebrew/bin/python3</string>
+        <string>/Users/yashbhavsar/Code/Adam/outreach_ui.py</string>
+        <string>--no-open</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/yashbhavsar/Code/Adam</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- The server is the whole point; if it dies, bring it back. -->
+    <key>KeepAlive</key>
+    <true/>
+
+    <!-- Unrotated, like the tracker's cron.log. It only logs request lines. -->
+    <key>StandardOutPath</key>
+    <string>/Users/yashbhavsar/Code/Adam/ui.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/yashbhavsar/Code/Adam/ui.log</string>
+</dict>
+</plist>

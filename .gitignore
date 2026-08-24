@@ -1,0 +1,10 @@
+.env
+.cache/
+__pycache__/
+*.pyc
+drafts/
+outreach.db
+*.log
+.DS_Store
+harvest/from_paraform_pipeline/ny_roles_mds/
+harvest/from_paraform_pipeline/*.csv
