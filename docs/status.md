@@ -31,26 +31,31 @@ just per-stage spikes.
 | Prior-contact check | **implemented** | `outreach/history.py` — searches Gmail sent mail before drafting. The store starts empty and knew nothing about months of hand-written outreach; it let the pipeline draft the target contact at company-a three weeks after a real email had already gone to him at a personal domain, which a recipient-domain check would also have missed |
 | Send step | **removed by design** | no code in this project can transmit a message. Sending is a human pressing Send in Gmail. `send_cold_email.py`'s message-building and attachment logic was reused; its SMTP call was not |
 | DB schema (`pending_outreach`, `outreach_log`) | **implemented** | `outreach/store.py`, local `outreach.db` on the Mac (supersedes the `tracker.db` decision — see `docs/decisions.md`). Per-company dedup enforced by `outreach_log`'s primary key, not by caller discipline. Eight invariant cases tested: claim, double-claim refused, better-posting swap, worse-posting ignored, contact never re-looked-up, send closes the company, post-send draft refused, one log row per company |
-| `git init` | not done | deliberately deferred; now more overdue than the original reason for deferring it — there's real code and a real run history to lose |
+| `git init` | **done** | pushed to `github.com/yashexe/Adam` |
 
 ## What this means practically
 
 The full pipeline runs end to end against live data. Semantic fit (the
 dimension that used to make QUALIFY rank Product Owners above backend
 engineers) is implemented and fixed the ranking — see `docs/qualify.md`.
-The `outreach` skill has produced real Gmail drafts: as of 2026-08-24,
-two companies (company-d, company-b) have verified, drafted, pending
-emails sitting in Gmail awaiting human review, and one (company-a) was
-correctly recognized as already contacted by hand and closed out without
-a duplicate.
+The `outreach` skill has produced real outcomes, not just drafts: as of
+2026-08-24, company-b was sent, company-a was correctly closed via the
+prior-contact check without a duplicate, and five candidates (including
+company-d) were reviewed and discarded — one of them, company-c, because
+a human caught `resolve_address()` returning a real but wrong-person
+mailbox (`wrong.mailbox@company-c.io` for the intended contact). That near-miss is now
+`CLAUDE.md`'s top open priority. Nothing is currently pending in Gmail.
 
-What's actually left:
+What's actually left — see `CLAUDE.md`'s "Current priority" for the full,
+ordered list:
 
+- **Verification can't confirm identity** — the company-c near-miss made
+  this concrete. Highest-consequence open item.
+- **Agent 1's `source_notes` are discarded** — would likely have surfaced
+  the company-c problem before verify did.
 - **Tier cutoffs** (`DEFAULT_MIN_SCORE = 65` in `outreach/pipeline.py`)
   are still the value inherited from Instaply for a different purpose,
-  un-tuned against the now-fixed semantic-fit scores. See
-  `docs/qualify.md`.
-- **`git init`** is still not done.
+  un-tuned against the now-fixed semantic-fit scores.
 - Whether the `outreach` skill should ever move from human-triggered to
   scheduled is open but not urgent — see `PIPELINE.md`'s execution-model
   section.

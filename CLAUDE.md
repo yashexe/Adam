@@ -115,8 +115,7 @@ matches and correctly closed out a company via the prior-contact check
    should ever move to an unattended/scheduled trigger instead of
    chat-triggered is still open, but not urgent. Note the Pi cannot host
    it either way: armv7l 32-bit, Node v10, no `claude` binary.
-5. **`git init`** [OPEN] — deliberately deferred, but there's now real code
-   and real run history worth versioning.
+5. **`git init`** [DECIDED] — done. Pushed to `github.com/yashexe/Adam`.
 
 The profile no longer blocks anything — it is hand-written in
 `qualify/profile.py` from the current resume, and Instaply's `parser.py` was
