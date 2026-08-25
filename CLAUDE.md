@@ -84,7 +84,8 @@ data, orchestrated by the `outreach` Claude Code skill
 `contact-finder` and `drafter` subagents. Semantic fit (QUALIFY's largest
 dimension) is implemented as a batched LLM judgement, which fixed the
 gate: the top of the ranking went from product-management and intern
-postings to backend infrastructure and forward-deployed roles. Numbers in
+postings to backend infrastructure and forward-deployed roles — but see
+item 6 below, that fix only ran manually until 2026-08-25. Numbers in
 `docs/qualify.md`. Full breakdown: `docs/status.md`.
 
 The pipeline has already produced real Gmail drafts against live tracker
@@ -127,6 +128,15 @@ matches and correctly closed out a company via the prior-contact check
    chat-triggered is still open, but not urgent. Note the Pi cannot host
    it either way: armv7l 32-bit, Node v10, no `claude` binary.
 5. **`git init`** [DECIDED] — done. Pushed to `github.com/yashexe/Adam`.
+6. **The judge never ran in a live outreach call** [FIXED 2026-08-25] —
+   `SKILL.md` went straight from `prepare` to Agent 1; `judge`/`judge-save`
+   only ever ran because they were invoked by hand during the tuning work
+   in `docs/qualify.md`. Caught live: company-aa's Technical Account
+   Manager posting scored 89 with semantic_fit (weight 30, the dimension
+   that tells relationship-management from engineering) silently absent
+   from the denominator — a same-titled posting judged properly elsewhere
+   scored 12. Fix: `SKILL.md` Step 1 now runs `judge` on the window and
+   saves the result before calling `prepare`, every time.
 
 The profile no longer blocks anything — it is hand-written in
 `qualify/profile.py` from the current resume, and Instaply's `parser.py` was

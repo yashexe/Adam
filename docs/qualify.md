@@ -277,6 +277,30 @@ Caveats: n=7; the set is survivorship-biased toward roles he chose to
 apply to; interview outcomes reflect more than role fit. These scores were
 not written to the pipeline's cache — they are not tracker postings.
 
+## The judge was never wired into a live run (found and fixed 2026-08-25)
+
+Everything above about semantic fit — that it's the dimension telling a
+Product Manager from a backend engineer, that it fixed the ranking — was
+true only of the manual `outreach_run.py judge` runs done by hand during
+the tuning work in this doc. `.claude/skills/outreach/SKILL.md`, what
+"run outreach" actually executes, went straight from `prepare` to Agent 1
+and never called `judge`/`judge-save` at all.
+
+Caught live: a same-day run scored a Technical Account Manager posting at
+company-aa 89 and it wasn't in `.cache/semantic.json`, nor was any other
+posting from that day's window. With semantic_fit (weight 30, the
+largest dimension) absent, `score_job` drops it from the denominator
+rather than scoring it zero, so the composite ran on the remaining 70
+points alone — none of which can tell a customer-facing role from an
+engineering one. A same-titled TAM posting elsewhere in the cache, judged
+properly, scored 12 with reason "a customer account-management role."
+
+Fix: `SKILL.md` Step 1 now runs `judge` before every `prepare`, invoking
+`relevance-judge` on whatever's unjudged and saving before scoring. No
+code changed — `outreach_run.py judge`/`judge-save` already existed and
+worked; they were just never called by the thing that runs the pipeline
+day to day.
+
 ## Years-of-experience hard eligibility (2026-08-25)
 
 Confirmed directly by Yash: 2.5-3 years counting everything (AMD,

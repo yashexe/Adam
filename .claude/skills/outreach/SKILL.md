@@ -19,7 +19,36 @@ Drafts land in Gmail and a human presses Send. Never offer to send, never
 look for a way to send, and never treat a user's "yes, that looks good" as
 authorization to do anything beyond leaving the draft where it is.
 
-## Step 1 — find who is worth contacting
+## Step 1 — judge, then find who is worth contacting
+
+`prepare`'s composite score has a semantic-fit dimension (weight 30 of
+100 — the single largest, and the only one that can tell a Product
+Manager posting from a backend one). It only applies to postings that
+have already been through the `relevance-judge` subagent; an unjudged
+posting scores on the *remaining* 70 points alone, which cannot tell
+customer-facing "technical" roles from engineering ones (see
+`docs/qualify.md`, "Years-of-experience hard eligibility" for a concrete
+case: a Technical Account Manager posting scored 89 this way). **Always
+judge the window before calling `prepare` — never call `prepare` on an
+unjudged window.**
+
+```bash
+python3 outreach_run.py judge --days 1
+```
+
+If it prints `all N posting(s) in the window are already judged` to
+stderr, skip straight to `prepare` below — this makes re-running the
+pipeline free, since judgements are cached per posting, not per run.
+
+Otherwise it prints a batch to stdout. Invoke the `relevance-judge`
+subagent with that batch verbatim as its input (it reads `PROFILE.md`
+itself). Take its JSON array output and pipe it into:
+
+```bash
+python3 outreach_run.py judge-save
+```
+
+Then:
 
 ```bash
 python3 outreach_run.py prepare --days 1 --json
@@ -31,7 +60,7 @@ dedup is per-company and non-negotiable — never work around a skip.
 
 Default window is 1 day. Widen with `--days 7` if the user asks for a
 backlog, and lower `--min-score` only if they explicitly want to see
-weaker matches.
+weaker matches. Judge the same window before preparing it, whatever it is.
 
 If nothing comes back, say so and stop. That is a normal outcome on a
 quiet day — weekends produce very few NY postings.
@@ -129,6 +158,9 @@ companies at any time.
 
 ## Costs worth knowing
 
+- The judge is one batched call over the whole unjudged window, not one
+  per company — cheap regardless of how many postings are in it, and free
+  on every subsequent run of the same window since judgements are cached.
 - Agent 1 runs 50–80k tokens and 15–30 tool calls per company.
 - Stage 4 spends 2–3 Hunter credits per company against a 100/month tier.
 
