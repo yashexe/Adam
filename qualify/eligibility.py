@@ -2,26 +2,35 @@
 Hard eligibility rules, applied before scoring.
 
 These are not quality heuristics and not an attempt to raise precision.
-They are two facts about what Yash is available for, and a posting that
-fails either is not a weak match, it is not a match at all:
+They are facts about what Yash is available for, and a posting that fails
+any of them is not a weak match, it is not a match at all:
 
 1. **Full-time only.** He is not an intern.
 2. **Not frontend-titled roles.** He does not enjoy frontend work and does
    not apply to roles with "Frontend" in the title. Frontend as one
    component of a broader role is fine and describes most jobs, so this
    tests the *title* only, never the description.
+3. **Not a stated minimum above his years.** Confirmed directly by Yash
+   2026-08-25: 2.5-3 years counting everything he's done, and a posting
+   naming 4+ isn't a stretch worth scoring — "at that point the range
+   doesn't even matter." A posting stating no minimum is eligible; absence
+   of a number is not a claim he falls short of one.
 
 This sits uneasily beside the project rule against exclude filters (see
 CLAUDE.md), which exists because a keyword blocklist quietly eats relevant
 postings. That rule is about precision tradeoffs on ambiguous matches.
-These two are unambiguous eligibility facts stated directly by the user, so
-they are implemented, kept deliberately tiny, and tested against the title
-alone. Do not grow this file into a general-purpose blocklist.
+These are unambiguous eligibility facts stated directly by the user, so
+they are implemented and kept deliberately tiny. The first two are tested
+against the title alone; the third needs the posting body, so it runs
+after the board fetch rather than before it. Do not grow this file into a
+general-purpose blocklist.
 """
 
 from __future__ import annotations
 
 import re
+
+from .profile import YEARS_OF_EXPERIENCE
 
 # Word-boundary matched against the title. "intern" must not fire on
 # "internal" or "international".
@@ -50,6 +59,15 @@ def check_title(title: str) -> tuple[bool, str]:
         return True, ""
     if _FRONTEND_RE.search(role_part):
         return False, "frontend names the role; frontend as one part of a role is fine"
+    return True, ""
+
+
+def check_years(years_experience_min: int | None) -> tuple[bool, str]:
+    """(eligible, reason). See rule 3 above. Reuses profile.py's
+    YEARS_OF_EXPERIENCE rather than a second hardcoded 3, so a future
+    resume update only has to change one number."""
+    if years_experience_min is not None and years_experience_min > YEARS_OF_EXPERIENCE:
+        return False, f"wants {years_experience_min}+ years, he has {YEARS_OF_EXPERIENCE}"
     return True, ""
 
 

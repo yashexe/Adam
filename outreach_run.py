@@ -88,7 +88,8 @@ def _judge_candidates(*, days: int, limit: int | None) -> list[dict]:
     needs. Scored deterministically first so nothing ineligible is judged."""
     from qualify.boards import job_data_for
     from qualify.candidates import fetch_candidates
-    from qualify.eligibility import check_title
+    from qualify.eligibility import check_title, check_years
+    from qualify.extractor import heuristic_extract_requirements
 
     out = []
     for row in fetch_candidates(days=days, limit=limit):
@@ -96,6 +97,9 @@ def _judge_candidates(*, days: int, limit: int | None) -> list[dict]:
             continue
         job_data = job_data_for(row)
         if job_data is None:
+            continue
+        reqs = heuristic_extract_requirements(job_data["description_text"])
+        if not check_years(reqs.get("years_experience_min"))[0]:
             continue
         out.append({
             "platform": row["platform"],

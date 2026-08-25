@@ -52,7 +52,12 @@ def heuristic_extract_requirements(job_text: str) -> dict:
             name for name, _category in extract_skill_hits(preferred_section)
         ]
 
-    year_match = re.search(r"(\d+)\+?\s+years?", text)
+    # Range first: "3-5 years" would otherwise match on the plain pattern
+    # below at "5 years" (the first number has no space before the dash),
+    # silently taking the range's ceiling as its floor.
+    year_match = re.search(r"(\d+)\s*(?:-|–|to)\s*\d+\+?\s*years?", text)
+    if not year_match:
+        year_match = re.search(r"(\d+)\+?\s+years?", text)
     if year_match:
         result["years_experience_min"] = int(year_match.group(1))
 

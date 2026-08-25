@@ -277,6 +277,35 @@ Caveats: n=7; the set is survivorship-biased toward roles he chose to
 apply to; interview outcomes reflect more than role fit. These scores were
 not written to the pipeline's cache — they are not tracker postings.
 
+## Years-of-experience hard eligibility (2026-08-25)
+
+Confirmed directly by Yash: 2.5-3 years counting everything (AMD,
+Finaptive intern, Finaptive full-time), and a posting naming 4+ isn't a
+stretch worth scoring or a contact-finder call — "at that point the range
+doesn't even matter." Two changes:
+
+- `qualify/profile.py`'s `YEARS_OF_EXPERIENCE` moved from 2 (a
+  resume-inferred "defensible middle" between 2.5 counting internships and
+  1.25 post-grad) to 3, the number stated directly.
+- `qualify/eligibility.py` gained a third hard rule, `check_years`: a
+  posting whose extracted minimum exceeds `YEARS_OF_EXPERIENCE` is
+  ineligible, same tier as full-time-only and no-frontend-titled. A
+  posting stating no minimum is eligible — absence of a number is not a
+  claim he falls short of one.
+
+Also fixed in `qualify/extractor.py`: the years-minimum regex matched
+`(\d+)\+?\s+years?` against the whole text, so a written range like
+"3-5 years" matched at "5 years" (no space before the dash on "3-5") and
+silently took the range's ceiling as its floor. A range pattern now runs
+first and takes the lower bound. This bug predates today's change and was
+already feeding the wrong number into `_score_experience_fit` for every
+ranged posting — the fix corrects scoring, not just the new hard gate.
+
+Checked against the ground truth above before landing: company-n's posting
+wants "3+ years" — under the new rule that's eligible (`3 <= 3`), matching
+what actually happened (full onsite loop). The rule as implemented does
+not contradict the one real data point available.
+
 ## What's explicitly not considered
 
 Anything not in the dimension table above — this gate does not currently

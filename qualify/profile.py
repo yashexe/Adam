@@ -19,13 +19,15 @@ YEARS_OF_EXPERIENCE, DOMAINS, and NEEDS_VISA_SPONSORSHIP.
 
 from __future__ import annotations
 
-# The resume shows AMD (May 2023–Apr 2024, 12mo), Finaptive intern
-# (Feb–May 2025, 4mo), and Finaptive full-time (Jun 2025–present, ~15mo):
-# ~2.5 years counting internships, ~1.25 post-graduation. 2 is the
-# defensible middle. It matters: `_score_experience_fit` compares this
-# directly against a posting's stated minimum, and a posting asking 5+
-# years scores 0.13 at 2 versus 0.33 at 3.
-YEARS_OF_EXPERIENCE = 2
+# Confirmed directly by Yash 2026-08-25: 2.5-3 years counting everything
+# (AMD May 2023-Apr 2024, Finaptive intern Feb-May 2025, Finaptive
+# full-time Jun 2025-present). 3 was the resume-inferred estimate this
+# replaced a defensible-middle guess of 2 with; it's also the ceiling
+# `qualify/eligibility.py`'s check_years uses to hard-exclude postings
+# wanting 4+. It matters for scoring too: `_score_experience_fit` compares
+# this directly against a posting's stated minimum, and a posting asking
+# 5+ years scores 0.33 at 3 versus 0.13 at 2.
+YEARS_OF_EXPERIENCE = 3
 
 # Must be keys of taxonomy.DOMAIN_KEYWORDS — `_score_domain_company_fit`
 # scores matched/len(DOMAINS), so every domain added dilutes the ratio for

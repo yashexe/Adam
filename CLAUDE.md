@@ -50,9 +50,10 @@ came from: `harvest/NOTES.md`. Why each fork was resolved the way it was:
 - Nothing sends without live, explicit human/chat approval — no exception,
   regardless of how confident any agent is.
 - Outreach is independent of applying — never gated behind "did I apply."
-- No sector filter layered on top of the QUALIFY score. The two hard
+- No sector filter layered on top of the QUALIFY score. The three hard
   eligibility rules in `qualify/eligibility.py` (full-time only, no
-  frontend-titled roles) are the deliberate exception and must stay tiny.
+  frontend-titled roles, no stated minimum above his years — 2026-08-25)
+  are the deliberate exception and must stay tiny.
 - Data lives in ashby-ny-tracker's `tracker.db` directly — no separate DB.
 - Contact targets are ranked by who is likeliest to reply, not by
   seniority. Recruiters are a first-class target, second only to a named

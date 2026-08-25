@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 
 from qualify.boards import job_data_for
 from qualify.candidates import fetch_candidates
-from qualify.eligibility import check_title
+from qualify.eligibility import check_title, check_years
 from qualify.extractor import heuristic_extract_requirements
 from qualify.profile import PREFERENCES, PROFILE
 from qualify.scorer import score_job
@@ -59,6 +59,8 @@ def _score_row(row: dict) -> tuple[int, int | None, dict] | None:
     if job_data is None:
         return None
     reqs = heuristic_extract_requirements(job_data["description_text"])
+    if not check_years(reqs.get("years_experience_min"))[0]:
+        return None
     total, breakdown = score_job(
         job_data, PREFERENCES, PROFILE, reqs, {"results": {}},
         # None when this posting has not been judged yet, which the scorer
