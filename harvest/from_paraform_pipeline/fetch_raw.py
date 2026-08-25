@@ -2,9 +2,15 @@ import subprocess
 import json
 import urllib.parse
 import os
+from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")
 
 role_id = "ROLE_ID_REDACTED"
-cookie_str = 'PARAFORM_COOKIE_REDACTED'
+cookie_str = os.getenv("PARAFORM_COOKIE")
+if not cookie_str:
+    raise RuntimeError("Set PARAFORM_COOKIE in .env (see .env.example)")
 
 input_obj = {"json": {"role_id": role_id}}
 input_str = urllib.parse.quote(json.dumps(input_obj))

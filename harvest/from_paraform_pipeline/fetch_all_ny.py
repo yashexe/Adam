@@ -10,7 +10,14 @@ input_csv = '/Users/yashbhavsar/Code/job-search-help/paraform_ny_roles.csv'
 output_dir = '/Users/yashbhavsar/Code/job-search-help/tmp/ny_roles_raw'
 os.makedirs(output_dir, exist_ok=True)
 
-cookie_str = 'PARAFORM_COOKIE_REDACTED'
+from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")
+
+cookie_str = os.getenv("PARAFORM_COOKIE")
+if not cookie_str:
+    raise RuntimeError("Set PARAFORM_COOKIE in .env (see .env.example)")
 
 roles = []
 with open(input_csv, 'r') as f:

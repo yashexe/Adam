@@ -23,8 +23,14 @@ with open('/Users/yashbhavsar/Code/job-search-help/paraform_all_jobs.csv', 'r') 
 output_dir = '/Users/yashbhavsar/Code/job-search-help/tmp/scraped_roles_raw'
 os.makedirs(output_dir, exist_ok=True)
 
-# Using the cookies from the original cURL
-cookie_str = 'PARAFORM_COOKIE_REDACTED'
+# Cookie read from .env — see .env.example
+from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")
+cookie_str = os.getenv("PARAFORM_COOKIE")
+if not cookie_str:
+    raise RuntimeError("Set PARAFORM_COOKIE in .env (see .env.example)")
 
 for role in roles_to_fetch:
     role_id = role['id']

@@ -1,6 +1,11 @@
 import subprocess
 import json
 import csv
+import os
+from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")
 
 old_csv = '/Users/yashbhavsar/Code/job-search-help/paraform_all_jobs.csv'
 try:
@@ -10,7 +15,9 @@ try:
 except Exception:
     old_count = 1118
 
-cookie_str = 'PARAFORM_COOKIE_REDACTED'
+cookie_str = os.getenv("PARAFORM_COOKIE")
+if not cookie_str:
+    raise RuntimeError("Set PARAFORM_COOKIE in .env (see .env.example)")
 
 url = "https://www.paraform.com/api/trpc/applicantUser.getAllRoles?input=%7B%22json%22%3A%7B%22query%22%3A%22%22%2C%22location%22%3A%5B%5D%2C%22workplace%22%3A%5B%5D%2C%22role_type%22%3A%5B%5D%2C%22industry%22%3A%5B%5D%2C%22posted_at%22%3A%7B%22min%22%3Anull%2C%22max%22%3Anull%7D%2C%22tech_stack%22%3A%5B%5D%2C%22size%22%3A%5B%5D%2C%22salary%22%3A%7B%22min%22%3Anull%2C%22max%22%3Anull%7D%2C%22yoe_experience%22%3A%7B%22min%22%3Anull%2C%22max%22%3Anull%7D%2C%22visa%22%3A%5B%5D%2C%22investors%22%3A%5B%5D%2C%22last_funding_round%22%3A%5B%5D%7D%7D"
 
