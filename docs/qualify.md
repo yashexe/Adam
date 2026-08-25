@@ -335,30 +335,40 @@ not contradict the one real data point available.
 The gap noted below as "not yet confirmed to be worth the complexity on a
 single observed instance" got a second instance the same day: reviewing
 the top-scored postings from a fresh run by hand, company-e (score 92) stated
-"US citizenship required; no visa sponsorship available." Yash's reaction
-was unambiguous: "if they ask US citizenship theres no point moving
-forward." Two real postings (company-p, company-e) is enough — implemented as
-a fourth hard rule, same tier as the other three:
+"US citizenship required; no visa sponsorship available." Yash's first
+reaction was "if they ask US citizenship theres no point moving forward" —
+but he was explicit that the rule is narrower than "no sponsorship":
+**only an explicit citizenship requirement disqualifies.** "No sponsorship"
+alone does not, because he may be TN-eligible (Canadian) and a company
+saying "we don't sponsor" is very often ruling out H-1B without being
+aware of, or meaning to rule out, TN. "Sometimes they may say no
+sponsorship available (not aware of the TN visa route) — ONLY if they
+mention US citizenship, should we back off."
 
-- `qualify/eligibility.py` gained `check_visa_sponsorship`: a posting
-  whose extracted `visa_sponsorship` is `"no"` is ineligible. Silent on
-  the question is eligible — same reasoning as the years rule, absence of
-  a statement isn't a claim it's unavailable.
-- `qualify/extractor.py`'s phrase list extended beyond "no visa" /
-  "unable to sponsor" / "do not sponsor" to also catch "citizenship
-  required" / "must be a us citizen" / "us citizens only" — a posting can
-  refuse sponsorship by demanding citizenship without ever using the word
-  "visa."
-- `qualify/profile.py`'s `NEEDS_VISA_SPONSORSHIP` flipped `False` → `True`.
-  It had been left `False` specifically to award the `preferences_fit`
-  visa sub-score's 2 points unconditionally — the same "soft signal buries
-  a hard fact" mistake the years gate fixed hours earlier, just worth 2
-  points instead of the 10 experience_fit carries.
-- Fixed along the way: `_score_preferences_fit`'s visa sub-score read
+- `qualify/extractor.py` gained a distinct `citizenship_required` boolean,
+  separate from the existing `visa_sponsorship` yes/no/unknown field —
+  matched against "citizenship required" / "must be a us citizen" / "us
+  citizens only". The two are deliberately not merged: general
+  no-sponsorship language stays a neutral signal, only a stated
+  citizenship requirement is disqualifying.
+- `qualify/eligibility.py` gained a fourth hard rule,
+  `check_citizenship_required`: a posting with `citizenship_required=True`
+  is ineligible. Silent, or merely "no sponsorship," is eligible.
+- `qualify/profile.py`'s `NEEDS_VISA_SPONSORSHIP` stays `False` on
+  purpose — general "no sponsorship" language should not cost points,
+  soft or hard, for the same TN-eligibility reason.
+- Fixed along the way (harmless while the flag above stays `False`, but a
+  real bug regardless): `_score_preferences_fit`'s visa sub-score read
   `job_data.get("visa_sponsorship")`, but nothing ever set that key on
   `job_data` — the field only ever existed on `extracted_reqs`, computed
-  by the extractor. The sub-score was silently inert regardless of the
-  `NEEDS_VISA_SPONSORSHIP` flag's value. Now reads `extracted_reqs`.
+  by the extractor. The sub-score was silently inert no matter what
+  `NEEDS_VISA_SPONSORSHIP` was set to. Now reads `extracted_reqs`.
+- `.claude/agents/drafter.md` gained an explicit ban on mentioning visa
+  status, sponsorship, or citizenship in a draft — that question is
+  settled upstream, before a company ever reaches Agent 1, and preempting
+  an objection the reader never raised is exactly the "expects to be
+  doubted" failure mode the drafter's contract already warns against
+  elsewhere.
 
 ## What's explicitly not considered
 

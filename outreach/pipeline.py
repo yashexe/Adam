@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 
 from qualify.boards import job_data_for
 from qualify.candidates import fetch_candidates
-from qualify.eligibility import check_title, check_visa_sponsorship, check_years
+from qualify.eligibility import check_citizenship_required, check_title, check_years
 from qualify.extractor import heuristic_extract_requirements
 from qualify.profile import PREFERENCES, PROFILE
 from qualify.scorer import score_job
@@ -61,7 +61,7 @@ def _score_row(row: dict) -> tuple[int, int | None, dict] | None:
     reqs = heuristic_extract_requirements(job_data["description_text"])
     if not check_years(reqs.get("years_experience_min"))[0]:
         return None
-    if not check_visa_sponsorship(reqs.get("visa_sponsorship"))[0]:
+    if not check_citizenship_required(reqs.get("citizenship_required"))[0]:
         return None
     total, breakdown = score_job(
         job_data, PREFERENCES, PROFILE, reqs, {"results": {}},

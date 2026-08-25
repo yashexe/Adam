@@ -15,12 +15,13 @@ any of them is not a weak match, it is not a match at all:
    naming 4+ isn't a stretch worth scoring — "at that point the range
    doesn't even matter." A posting stating no minimum is eligible; absence
    of a number is not a claim he falls short of one.
-4. **Not "no visa sponsorship" / citizenship required.** Confirmed directly
-   by Yash 2026-08-25, reacting to a real posting (company-e) stating "US
-   citizenship required; no visa sponsorship available": "if they ask US
-   citizenship theres no point moving forward." A posting silent on
-   sponsorship is eligible — silence isn't a claim it's unavailable, same
-   reasoning as rule 3.
+4. **Not a stated US citizenship requirement.** Confirmed directly by Yash
+   2026-08-25, reacting to a real posting (company-e) stating "US citizenship
+   required": "if they ask US citizenship theres no point moving forward."
+   Narrower than "no sponsorship" on purpose, per Yash: a posting saying
+   only that is still eligible — he may be TN-eligible and companies say
+   "no sponsorship" without meaning to rule that route out; "ONLY if they
+   mention US citizenship, should we back off."
 
 This sits uneasily beside the project rule against exclude filters (see
 CLAUDE.md), which exists because a keyword blocklist quietly eats relevant
@@ -77,10 +78,12 @@ def check_years(years_experience_min: int | None) -> tuple[bool, str]:
     return True, ""
 
 
-def check_visa_sponsorship(visa_sponsorship: str | None) -> tuple[bool, str]:
-    """(eligible, reason). See rule 4 above."""
-    if visa_sponsorship == "no":
-        return False, "states no visa sponsorship / citizenship required"
+def check_citizenship_required(citizenship_required: bool) -> tuple[bool, str]:
+    """(eligible, reason). See rule 4 above. Deliberately does not look at
+    general "no visa sponsorship" language -- only an explicit citizenship
+    requirement disqualifies."""
+    if citizenship_required:
+        return False, "states US citizenship required"
     return True, ""
 
 

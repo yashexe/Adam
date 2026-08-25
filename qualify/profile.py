@@ -43,15 +43,16 @@ DOMAINS = [
     "Security",
 ]
 
-# Confirmed directly by Yash 2026-08-25, reacting to a real posting
-# (company-e) stating "US citizenship required; no visa sponsorship
-# available": "if they ask US citizenship theres no point moving
-# forward." A posting saying no is now a hard eligibility failure
-# (qualify/eligibility.py's check_visa_sponsorship), not just a lost
-# preferences_fit point -- that dimension is soft-weighted 2/100 and
-# would have buried an unambiguous disqualifier in noise, the same
-# mistake the years-experience gate fixed a few hours earlier today.
-NEEDS_VISA_SPONSORSHIP = True
+# Left False deliberately, confirmed directly by Yash 2026-08-25: "no
+# visa sponsorship" language alone should NOT cost points, soft or hard --
+# he may be TN-eligible (Canadian), and a company saying "we don't
+# sponsor" often means no H-1B and isn't aware of or ruling out TN. Only
+# an explicit citizenship requirement is disqualifying, and that's a hard
+# eligibility gate (qualify/eligibility.py's check_citizenship_required),
+# not this soft preferences_fit sub-score -- so this flag stays False on
+# purpose, unlike YEARS_OF_EXPERIENCE which did need correcting the same
+# day.
+NEEDS_VISA_SPONSORSHIP = False
 # ---------------------------------------------------------------------------
 
 SKILLS = [

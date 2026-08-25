@@ -55,6 +55,10 @@ came from: `harvest/NOTES.md`. Why each fork was resolved the way it was:
   frontend-titled roles, no stated minimum above his years, no stated
   visa-sponsorship refusal / citizenship requirement — all 2026-08-25
   except the first two) are the deliberate exception and must stay tiny.
+  The visa rule is deliberately narrow: only an explicit US-citizenship
+  requirement disqualifies, never a plain "no sponsorship" statement — he
+  may be TN-eligible and companies often say the latter without meaning
+  to rule that route out.
 - Data lives in ashby-ny-tracker's `tracker.db` directly — no separate DB.
 - Contact targets are ranked by who is likeliest to reply, not by
   seniority. Recruiters are a first-class target, second only to a named
@@ -142,12 +146,20 @@ matches and correctly closed out a company via the prior-contact check
    [FIXED 2026-08-25] — hand-reviewing the freshly-judged top scorers
    turned up company-e (92, Founding Engineer) stating "US citizenship
    required; no visa sponsorship available." Yash: "if they ask US
-   citizenship theres no point moving forward." `qualify/eligibility.py`
-   gained a fourth hard rule, `check_visa_sponsorship`; `NEEDS_VISA_SPONSORSHIP`
-   in `qualify/profile.py` flipped `False` → `True`; a wiring bug that left
-   the old soft `preferences_fit` visa sub-score permanently inert
-   (reading a `job_data` key nothing ever set) was fixed along the way.
-   Full derivation: `docs/qualify.md`, "Visa-sponsorship hard eligibility".
+   citizenship theres no point moving forward" — but narrower than "no
+   sponsorship": only an explicit citizenship requirement disqualifies,
+   never plain "no sponsorship" alone, since he may be TN-eligible and
+   companies often say the latter without meaning to rule that route out.
+   `qualify/extractor.py` gained a distinct `citizenship_required` signal
+   (separate from the existing `visa_sponsorship` field, which stays a
+   neutral signal); `qualify/eligibility.py` gained a fourth hard rule,
+   `check_citizenship_required`; `NEEDS_VISA_SPONSORSHIP` in
+   `qualify/profile.py` stays `False` on purpose; `.claude/agents/drafter.md`
+   gained a ban on ever mentioning visa/sponsorship/citizenship in a
+   draft; a wiring bug that left the old soft `preferences_fit` visa
+   sub-score permanently inert (reading a `job_data` key nothing ever
+   set) was fixed along the way. Full derivation: `docs/qualify.md`,
+   "Visa-sponsorship hard eligibility".
 
 The profile no longer blocks anything — it is hand-written in
 `qualify/profile.py` from the current resume, and Instaply's `parser.py` was

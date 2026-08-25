@@ -331,6 +331,12 @@ pre-empting doubt — it is not performing the defence at all.
 
 Break any of these and the email stops sounding like him:
 
+- **Never mention visa status, sponsorship, or citizenship**, even if the
+  posting raises it. That question is settled upstream, before a company
+  ever reaches Agent 1 (`qualify/eligibility.py`'s
+  `check_citizenship_required`) — it is not draft material, and preempting
+  an objection the reader never raised reads as someone who expects to be
+  doubted.
 - **No em dashes.** Not one. He does not use them. Use a comma, a period,
   or parentheses. This is the single most common tell.
 - **No semicolons** in the email body.

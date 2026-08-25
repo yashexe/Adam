@@ -26,6 +26,7 @@ EMPTY_RESULT: dict = {
     "employment_type": "unknown",
     "salary_range": None,
     "visa_sponsorship": "unknown",
+    "citizenship_required": False,
     "responsibilities": [],
     "domain_signals": [],
     "disqualifying_constraints": [],
@@ -85,14 +86,21 @@ def heuristic_extract_requirements(job_text: str) -> dict:
         result["visa_sponsorship"] = "unknown"
     elif any(
         phrase in text
-        for phrase in (
-            "no visa", "unable to sponsor", "do not sponsor",
-            "citizenship required", "must be a us citizen", "us citizens only",
-        )
+        for phrase in ("no visa", "unable to sponsor", "do not sponsor")
     ):
         result["visa_sponsorship"] = "no"
     elif any(phrase in text for phrase in ("will sponsor", "sponsorship available")):
         result["visa_sponsorship"] = "yes"
+
+    # Separate from visa_sponsorship on purpose: "no sponsorship" alone is
+    # not disqualifying (he may be TN-eligible, and plenty of companies say
+    # it without meaning to rule out TN) -- only an explicit citizenship
+    # requirement is. See qualify/eligibility.py's check_citizenship_required.
+    if any(
+        phrase in text
+        for phrase in ("citizenship required", "must be a us citizen", "us citizens only")
+    ):
+        result["citizenship_required"] = True
 
     result["role_family"] = infer_role_family(job_text)
     result["domain_signals"] = extract_domains(job_text)
