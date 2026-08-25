@@ -42,6 +42,10 @@ CREATE TABLE IF NOT EXISTS pending_outreach (
     contact_email   TEXT,
     confidence      TEXT,
     draft_subject   TEXT,
+    -- Agent 1's reasoning: which sources it used and what stayed
+    -- uncertain. Discarded until 2026-08-24, which meant a draft could
+    -- never be reviewed for *why* that contact was chosen.
+    source_notes    TEXT,
     -- A higher-scoring posting that appeared after the draft was written.
     -- Recorded, never swapped in: see update_posting().
     superseded_note TEXT,
@@ -76,6 +80,7 @@ CREATE TABLE IF NOT EXISTS outreach_log (
 # Idempotent, runs on every connect.
 _ADDED_COLUMNS = {
     "outreach_log": ("contact_role", "replied_at", "reply_checked_at"),
+    "pending_outreach": ("source_notes",),
 }
 
 
@@ -152,6 +157,7 @@ def record_draft(
     contact_email: str,
     confidence: str | None = None,
     draft_subject: str | None = None,
+    source_notes: str | None = None,
 ) -> None:
     """Claim a company. Raises AlreadyClaimed if it is spoken for.
 
@@ -177,9 +183,9 @@ def record_draft(
         conn.execute(
             "INSERT OR REPLACE INTO pending_outreach (company_slug, platform, job_id, "
             "job_title, job_url, score, contact_name, contact_role, contact_email, "
-            "confidence, draft_subject) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            "confidence, draft_subject, source_notes) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
             (company_slug, platform, job_id, job_title, job_url, score, contact_name,
-             contact_role, contact_email, confidence, draft_subject),
+             contact_role, contact_email, confidence, draft_subject, source_notes),
         )
         conn.commit()
 

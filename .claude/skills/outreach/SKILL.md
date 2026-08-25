@@ -92,9 +92,16 @@ python3 outreach_run.py finalize
   "domain": "company-a.com",
   "observed_address": "press.contact@company-a.com",
   "subject": "erp integration work at company-a",
-  "body": "...Agent 2's body, paragraphs separated by blank lines..."
+  "body": "...Agent 2's body, paragraphs separated by blank lines...",
+  "source_notes": "Agent 1's source_notes field, verbatim"
 }
 ```
+
+**Always include `source_notes`** — Agent 1's own field from step 2, passed
+through unedited. This is the one place it goes: stored on the claim so a
+pending or discarded draft can be reviewed later for *why* that contact was
+chosen, without ever reaching Agent 2 (the step 3 restriction is unchanged —
+this field is for the record, not the draft).
 
 This lints the draft, resolves the real address from the domain's own
 pattern, verifies it, refuses to draft if the address is undeliverable,

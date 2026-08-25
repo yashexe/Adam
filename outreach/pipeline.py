@@ -145,6 +145,7 @@ def finalize(
     subject: str,
     body: str,
     observed_address: str | None = None,
+    source_notes: str | None = None,
     ignore_prior_contact: bool = False,
     ignore_lint: bool = False,
 ) -> FinalizeResult:
@@ -210,6 +211,7 @@ def finalize(
         score=candidate.score, contact_name=contact_name,
         contact_role=contact_role, contact_email=email,
         confidence=verification.label, draft_subject=subject,
+        source_notes=source_notes,
     )
     return FinalizeResult(
         slug, email, verification.label, True,

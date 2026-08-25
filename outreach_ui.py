@@ -453,6 +453,7 @@ function card(c) {
       <span class="vchip ${esc(c.confidence || "")}" title="${esc(vWhy)}">${esc(vLabel)}</span>
     </div>
     ${vWhy ? `<div class="note small">${esc(vWhy)}</div>` : ""}
+    ${c.source_notes ? `<div class="note small">Why this contact: ${esc(c.source_notes)}</div>` : ""}
     <div class="note">${esc(EXPLAIN[g.state])}${
       g.sent_date ? " <br>Sent " + esc(g.sent_date) + "." : ""
     }</div>
