@@ -17,7 +17,7 @@ just per-stage spikes.
 | Harvest (3 source projects) | done | `harvest/`, see `harvest/NOTES.md` per-component |
 | Execution model | **decided + implemented** | Claude Code-orchestrated on this Mac, human-triggered via the `outreach` skill — see `PIPELINE.md`. Ruled out: hosting it on the Pi (armv7l 32-bit, Node v10.15.2, no `claude` binary — Claude Code needs Node 18+ and doesn't target 32-bit ARM) |
 | Orchestration (`outreach` skill + CLI) | **implemented** | `.claude/skills/outreach/SKILL.md` drives `outreach_run.py` (`prepare` / `judge` / `judge-save` / `finalize` / `status`, backed by `outreach/pipeline.py`). This is the glue between stages that was previously missing |
-| QUALIFY gate | **implemented and discriminating** | `qualify/` + `qualify_run.py`. Deterministic dimensions plus a batched LLM semantic-fit judgement (`qualify/semantic.py`). Top of the ranking is now backend infrastructure and FDE roles; PM, presales, management and hardware roles fall out on their own. Tier cutoffs still un-tuned |
+| QUALIFY gate | **implemented and discriminating** | `qualify/` + `qualify_run.py`. Deterministic dimensions plus a batched LLM semantic-fit judgement (`qualify/semantic.py`). Top of the ranking is now backend infrastructure and FDE roles; PM, presales, management and hardware roles fall out on their own. Tiers re-tuned 2026-08-24 from the judged sample (strong ≥72, spend bar 65 kept after measurement) — see `docs/qualify.md` |
 | Resume/profile parsing | **done, by hand** | `qualify/profile.py`, written from `Yash_Bhavsar_Resume_08192026.pdf`. Instaply's `parser.py` deliberately not revived: one resume, four fields, no pipeline needed. All 46 skills resolve against `taxonomy.py` |
 | Candidate feed | **implemented** | `qualify/candidates.py` — read-only SSH pull from the Pi's live `tracker.db`. Reproduces poll.py's NY/role predicates because `seen_jobs` holds every posting and `pending_alerts` is cleared after each alert email |
 | Job descriptions | **implemented** | `qualify/boards.py` — fetched from the public Ashby/Greenhouse APIs (the tracker stores no description), cached per company for 24h |
@@ -31,6 +31,7 @@ just per-stage spikes.
 | Prior-contact check | **implemented** | `outreach/history.py` — searches Gmail sent mail before drafting. The store starts empty and knew nothing about months of hand-written outreach; it let the pipeline draft the target contact at company-a three weeks after a real email had already gone to him at a personal domain, which a recipient-domain check would also have missed |
 | Send step | **removed by design** | no code in this project can transmit a message. Sending is a human pressing Send in Gmail. `send_cold_email.py`'s message-building and attachment logic was reused; its SMTP call was not |
 | DB schema (`pending_outreach`, `outreach_log`) | **implemented** | `outreach/store.py`, local `outreach.db` on the Mac (supersedes the `tracker.db` decision — see `docs/decisions.md`). Per-company dedup enforced by `outreach_log`'s primary key, not by caller discipline. Eight invariant cases tested: claim, double-claim refused, better-posting swap, worse-posting ignored, contact never re-looked-up, send closes the company, post-send draft refused, one log row per company |
+| Agent 1's `source_notes` persisted | **implemented** | `pending_outreach.source_notes` column (bolted on via the existing `_ADDED_COLUMNS` migration pattern), populated through the `outreach` skill's finalize payload, rendered on each card in `outreach_ui.py`. Never reaches Agent 2 — storage only |
 | `git init` | **done** | pushed to `github.com/yashexe/Adam` |
 
 ## What this means practically
@@ -49,11 +50,8 @@ the same day — see below. Nothing is currently pending in Gmail.
 What's actually left — see `CLAUDE.md`'s "Current priority" for the full,
 ordered list:
 
-- **Agent 1's `source_notes` are discarded** — would likely have surfaced
-  the company-c problem even before verify did. Now the top open item.
-- **Tier cutoffs** (`DEFAULT_MIN_SCORE = 65` in `outreach/pipeline.py`)
-  are still the value inherited from Instaply for a different purpose,
-  un-tuned against the now-fixed semantic-fit scores.
 - Whether the `outreach` skill should ever move from human-triggered to
   scheduled is open but not urgent — see `PIPELINE.md`'s execution-model
   section.
+- The re-tuned tier cutoffs are derived from a single 56-posting week;
+  worth re-checking once a few more judged windows accumulate.

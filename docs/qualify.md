@@ -50,16 +50,24 @@ hand-written directly from the current resume in `qualify/profile.py`
 `parser.py` was deliberately not revived for a one-resume input. The gate
 runs against the current profile.
 
-## Decision tiers (from Instaply, starting point not gospel)
+## Decision tiers (re-tuned 2026-08-24)
 
-- 85–100: strong match
-- 65–84: worth a look
+- 72–100: strong match
+- 65–71: worth a look
 - <65: not strong enough to spend an Agent 1 call on
 
-These were Instaply's alert/digest/ignore thresholds for a different
-purpose (deciding whether to *email the user*). Whether the same cutoffs
-are right for "spend an agentic contact-search call" is an open
-implementation question, not a decided one — the cost/benefit is different.
+Instaply's inherited cutoffs were 85/65 — thresholds for a different
+purpose (deciding whether to *email the user*) over a different score
+distribution. Once semantic fit landed, 85 became unreachable: the judge's
+0-100 maps onto the scorer's SEMANTIC_SIM_FLOOR..CEIL band, which
+compresses the composite, and the maximum observed over the 56-posting
+judged sample is 83. Nothing was ever "strong" under the old tier.
+
+The re-tune is empirical, from the joint distribution of composite score
+and judge score over that sample (see "Where the cutoffs come from"
+below). `DEFAULT_MIN_SCORE` in `outreach/pipeline.py` stays 65 — no longer
+inherited, now measured: below 63 the judge rates postings ≤27 almost
+uniformly, so 65 already fences the noise.
 
 ## Where an LLM is involved
 
@@ -153,8 +161,49 @@ Every product-management, presales, engineering-management and hardware
 role dropped out on its own, with no exclude list: the judge simply read
 them and scored them 3-16.
 
-The tier cutoffs (85/65) are now calibratable, since the score finally
-measures the right thing. They have not been re-tuned yet.
+The tier cutoffs became calibratable once the score measured the right
+thing, and were re-tuned the next day — see below.
+
+## Where the cutoffs come from (2026-08-24)
+
+The full judged sample (56 postings, judgements cached in
+`.cache/semantic.json`) was re-scored with semantic fit present and laid
+out as composite score against judge score. The structure:
+
+| Composite band | Postings | Judge range | What's actually in it |
+|---|---:|---|---|
+| 73–83 | 6 | 72–88 | backend infra, FDE ×2, founding, data eng, BI — every one a real target |
+| 67–69 | 4 | 55–62 | genuine engineering roles, moderate fit |
+| 63–66 | 5 | 35–55 | the gray zone — see below |
+| <63 | 41 | 3–45 (nearly all ≤27) | product managers, presales, hardware, marketing |
+
+Three facts drove the numbers:
+
+1. **The strong cluster is clean and separated.** The six postings at
+   composite ≥73 are exactly the six the judge rated ≥72, and there is an
+   empty gap at 70–72 (nothing scored between 69 and 73). The strong
+   cutoff is 72: it splits the gap, hugging the observed cluster floor
+   (73) with a point of slack for jitter. Anything in 70–72 selects the
+   same set on this sample.
+2. **The composite cannot order the 63–66 zone.** company-u's IT-platform
+   role (judge 40) outscored company-v's real full-stack role (judge 55)
+   there — the near-constant dimensions dominate once semantic fit stops
+   being decisive. No cutoff placed inside this zone means anything;
+   the human reviewing the candidate list is the filter there, which
+   matches the broad-gates ethos.
+3. **65 as the spend bar already works.** Below 63 the judge is ≤27
+   almost uniformly. Raising the bar to 67 would have excluded one
+   judge-40 role (correctly) and one judge-55 role (wrongly) — a
+   precision gain too small to pay recall for.
+
+Practical yield at these cutoffs, on the sample week: ~6 strong companies
+and ~5 worth-a-look per 7 days. If the human approves mainly strong-tier
+contacts, that is roughly 26 companies/month at 2–3 Hunter credits each —
+inside the 100/month tier, which the old bar's ~47/month was not.
+
+Derived from one 56-posting week. Worth re-checking once a few more
+judged windows accumulate, but no longer inherited from a different tool
+for a different job.
 
 ## What's explicitly not considered
 

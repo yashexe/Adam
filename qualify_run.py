@@ -35,7 +35,13 @@ from qualify.semantic import cached_score, cached_similarity
 # user" rather than "spend an agentic contact-search call" — a different
 # cost/benefit, so treat them as a starting point to calibrate against real
 # output, not as settled thresholds.
-TIERS = ((85, "strong"), (65, "worth a look"), (0, "below bar"))
+# Re-tuned 2026-08-24 against the 56-posting judged sample (docs/qualify.md).
+# Instaply's inherited 85 sat above the entire observed distribution (max
+# composite: 83) because the semantic dimension maps the judge's 0-100 onto
+# the scorer's similarity band. The judge-confirmed strong cluster bottoms
+# out at 73 with an empty gap down to 69; 72 splits that gap with a point
+# of slack for jitter.
+TIERS = ((72, "strong"), (65, "worth a look"), (0, "below bar"))
 
 
 def tier_for(score: int) -> str:

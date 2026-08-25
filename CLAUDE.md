@@ -104,14 +104,20 @@ matches and correctly closed out a company via the prior-contact check
    `resolve_address` will return it — a rendered or observed address that
    Hunter already attributes to a different name is refused, the same way
    a role account already was.
-2. **Agent 1's reasoning is discarded** [OPEN] — `source_notes` explains
-   which sources were used and what stayed uncertain, and nothing stores it,
-   so a draft cannot be reviewed for *why* that contact was chosen. Needs a
-   column on `pending_outreach` and one field in the skill's finalize
-   payload. Would likely have surfaced the company-c address problem.
-3. **Tier cutoffs** [OPEN] — 85/65 were inherited from Instaply for a
-   different purpose and have never been re-tuned. Now worth doing, because
-   the score finally measures role substance. See `docs/qualify.md`.
+2. **Agent 1's reasoning is discarded** [FIXED 2026-08-24] — `source_notes`
+   explains which sources were used and what stayed uncertain; nothing
+   stored it, so a draft could not be reviewed for *why* that contact was
+   chosen. Fix: `pending_outreach.source_notes` (`outreach/store.py`), the
+   `outreach` skill's finalize payload now always includes it
+   (`SKILL.md` step 4), and it's rendered on each card in the review UI
+   (`outreach_ui.py`) — visible without reaching Agent 2, which still never
+   sees it.
+3. **Tier cutoffs** [FIXED 2026-08-24] — re-tuned empirically from the
+   joint composite/judge distribution over the 56-posting judged sample:
+   strong is now 72 (Instaply's 85 sat above the entire observed
+   distribution — max composite is 83), and the 65 spend bar was kept
+   deliberately after measuring it, no longer inherited. Full derivation:
+   `docs/qualify.md`, "Where the cutoffs come from".
 4. **Execution model** [DECIDED] — Claude Code-orchestrated on this Mac,
    human-triggered via the `outreach` skill, reusing the existing
    subscription rather than a new metered API. Built and running, not just
