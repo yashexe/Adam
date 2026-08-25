@@ -22,7 +22,7 @@ just per-stage spikes.
 | Candidate feed | **implemented** | `qualify/candidates.py` — read-only SSH pull from the Pi's live `tracker.db`. Reproduces poll.py's NY/role predicates because `seen_jobs` holds every posting and `pending_alerts` is cleared after each alert email |
 | Job descriptions | **implemented** | `qualify/boards.py` — fetched from the public Ashby/Greenhouse APIs (the tracker stores no description), cached per company for 24h |
 | Agent 1 (find contact) | **implemented** | `.claude/agents/contact-finder.md`. Spiked 5/5 on live companies, two prompt defects found and fixed — see `docs/agents.md`, "Measured behavior" |
-| Verify step (email check) | **implemented and live** | `outreach/verify.py`. Hunter email-verifier + domain-search pattern corroboration, cached per address, degrades to `unverified` on any failure. `HUNTER_API_KEY` is set and exercised against the real API — both current pending drafts (company-d, company-b) show `verified` addresses |
+| Verify step (email check) | **implemented and live** | `outreach/verify.py`. Hunter email-verifier + domain-search pattern corroboration, cached per address, degrades to `unverified` on any failure. `HUNTER_API_KEY` is set and exercised against the real API. Since 2026-08-24 also cross-checks a candidate/fallback address against Hunter's per-address names (`_name_conflict`) before returning it, closing the identity gap the company-c near-miss exposed |
 | Draft lint | **implemented** | `outreach/draft_lint.py`, run inside `finalize`. Checks sentence length, clause pileups, number count and implementation-vocabulary density; returns issues for the drafter to fix rather than silently passing weak drafts through |
 | Agent 2 (draft email) | **implemented** | `.claude/agents/drafter.md`. Rewritten from Yash's real sent cold emails (voice, structure, no em dashes) — see `docs/agents.md`, "Agent 2 — the voice rewrite." Held the no-AI-tooling positioning rule under direct pressure |
 | Human-review surface | **decided + implemented** | Gmail Drafts, via `outreach/gmail_draft.py` (IMAP APPEND). Replaced both the review surface and the send step — see `PIPELINE.md` stage 6+7 |
@@ -43,16 +43,14 @@ The `outreach` skill has produced real outcomes, not just drafts: as of
 prior-contact check without a duplicate, and five candidates (including
 company-d) were reviewed and discarded — one of them, company-c, because
 a human caught `resolve_address()` returning a real but wrong-person
-mailbox (`wrong.mailbox@company-c.io` for the intended contact). That near-miss is now
-`CLAUDE.md`'s top open priority. Nothing is currently pending in Gmail.
+mailbox (`wrong.mailbox@company-c.io` for the intended contact). That near-miss drove a fix
+the same day — see below. Nothing is currently pending in Gmail.
 
 What's actually left — see `CLAUDE.md`'s "Current priority" for the full,
 ordered list:
 
-- **Verification can't confirm identity** — the company-c near-miss made
-  this concrete. Highest-consequence open item.
 - **Agent 1's `source_notes` are discarded** — would likely have surfaced
-  the company-c problem before verify did.
+  the company-c problem even before verify did. Now the top open item.
 - **Tier cutoffs** (`DEFAULT_MIN_SCORE = 65` in `outreach/pipeline.py`)
   are still the value inherited from Instaply for a different purpose,
   un-tuned against the now-fixed semantic-fit scores.

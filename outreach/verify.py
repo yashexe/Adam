@@ -175,18 +175,22 @@ def verify_email(email: str, *, use_cache: bool = True) -> VerificationResult:
     return result
 
 
-def confirm_pattern(domain: str) -> tuple[str | None, str]:
+def confirm_pattern(domain: str) -> tuple[str | None, str, list[dict]]:
     """Hunter's own view of a domain's address pattern, for corroborating
-    what Agent 1 inferred. Spends a credit, so this is opt-in: use it when
-    Agent 1's pattern evidence was weak, not on every contact."""
+    what Agent 1 inferred, plus the per-address names behind it. The name
+    list is what catches a pattern-derived address that happens to already
+    belong to someone else — see `_name_conflict`. Spends a credit, so this
+    is opt-in: use it when Agent 1's pattern evidence was weak, not on
+    every contact."""
     key = _api_key()
     if not key:
-        return None, f"no HUNTER_API_KEY in {ENV_PATH}"
+        return None, f"no HUNTER_API_KEY in {ENV_PATH}", []
     payload, error = _get(DOMAIN_SEARCH_URL, {"domain": domain, "api_key": key})
     if payload is None:
-        return None, error
+        return None, error, []
     data = payload.get("data") or {}
-    return data.get("pattern"), f"{len(data.get('emails') or [])} addresses seen"
+    emails = data.get("emails") or []
+    return data.get("pattern"), f"{len(emails)} addresses seen", emails
 
 
 def credits_remaining() -> tuple[int | None, str]:
@@ -219,6 +223,14 @@ def credits_remaining() -> tuple[int | None, str]:
 #
 # One real address is a sample of size one. Hunter sees the whole domain
 # for the same credit, so the deterministic layer should own this.
+#
+# Deliverable is not the same as belonging to the right person. The
+# company-c case (2026-08-24) showed why: applying `{first}{l}` to "[the contact]" renders wrong.mailbox@company-c.io, a real mailbox that verifies at score
+# 100 -- and belongs to a different, unrelated employee. Hunter's domain-search
+# response names the person behind each address it has seen; confirm_pattern
+# now returns that list instead of discarding it, and _name_conflict checks
+# a candidate against it before resolve_address will use it. Caught by hand
+# that time; now it cannot happen silently.
 
 # Role accounts are never outreach targets -- the whole point of this
 # pipeline is reaching a person rather than a shared inbox, and
@@ -264,6 +276,37 @@ def _apply_pattern(pattern: str, first: str, last: str) -> str | None:
     return local
 
 
+def _name_conflict(
+    emails: list[dict], address: str, first: str, last: str
+) -> str | None:
+    """None if `address` is safe to use for (first, last); otherwise a
+    reason it is not.
+
+    Hunter's domain-search enumerates real addresses it has seen, each with
+    the name behind it when known. A rendered or observed address can
+    coincide with one of those without belonging to the same person — that
+    is exactly what happened with wrong.mailbox@company-c.io. This costs nothing
+    extra: the name list is already in the domain-search response
+    `confirm_pattern` fetches, just no longer discarded.
+    """
+    local = address.lower()
+    for entry in emails:
+        if (entry.get("value") or "").lower() != local:
+            continue
+        known_first = (entry.get("first_name") or "").strip()
+        known_last = (entry.get("last_name") or "").strip()
+        if not known_first:
+            return None  # Hunter has the address but no name to check against
+        if known_first.lower() == first.lower() and (
+            not known_last or not last or known_last.lower() == last.lower()
+        ):
+            return None  # same person
+        known = f"{known_first} {known_last}".strip()
+        return (f"Hunter's domain-search lists {address} as {known}, "
+                f"not {first} {last}")
+    return None  # address isn't among Hunter's known contacts at all
+
+
 def resolve_address(
     first: str, last: str, domain: str, *, fallback: str | None = None
 ) -> tuple[str | None, VerificationResult]:
@@ -274,20 +317,24 @@ def resolve_address(
     pattern-derived address, and one more if `fallback` differs and the
     first came back blocking. Returns (address, verification).
     """
-    pattern, note = confirm_pattern(domain)
+    pattern, note, emails = confirm_pattern(domain)
     candidate = _apply_pattern(pattern or "", first, last)
 
     tried = ""
     if candidate:
         address = f"{candidate}@{domain}"
-        result = verify_email(address)
-        if not result.should_block:
-            return address, result
-        # The pattern was fine, the resulting mailbox just is not there.
-        # Reporting this as "no usable pattern" sent me chasing the wrong
-        # bug once; say which of the two actually failed.
-        tried = (f"pattern {pattern} gives {address}, which does not exist "
-                 f"({result.reason})")
+        conflict = _name_conflict(emails, address, first, last)
+        if conflict:
+            tried = conflict
+        else:
+            result = verify_email(address)
+            if not result.should_block:
+                return address, result
+            # The pattern was fine, the resulting mailbox just is not there.
+            # Reporting this as "no usable pattern" sent me chasing the
+            # wrong bug once; say which of the two actually failed.
+            tried = (f"pattern {pattern} gives {address}, which does not "
+                     f"exist ({result.reason})")
 
     if fallback and is_role_account(fallback):
         return None, VerificationResult(
@@ -298,6 +345,11 @@ def resolve_address(
         )
 
     if fallback:
+        conflict = _name_conflict(emails, fallback, first, last)
+        if conflict:
+            return None, VerificationResult(
+                email=fallback, label=UNVERIFIED, reason=conflict,
+            )
         result = verify_email(fallback)
         if not result.should_block:
             return fallback, result

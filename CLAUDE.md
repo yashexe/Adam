@@ -92,14 +92,18 @@ matches and correctly closed out a company via the prior-contact check
 
 ## Current priority
 
-1. **Verification cannot confirm identity** [OPEN, highest consequence] —
-   `resolve_address()` checks that a mailbox is deliverable, never that it
-   belongs to the person Agent 1 named. Applying company-c.io's
-   `{first}{l}` pattern to the intended contact produced `wrong.mailbox@company-c.io`, a real
-   mailbox verified at score 100 belonging to someone else. Caught by hand
-   before sending. Hunter's domain-search response carries per-address names
-   that `confirm_pattern()` currently discards and could cross-check
-   against. This is the only open failure that reaches a stranger.
+1. **Verification cannot confirm identity** [FIXED 2026-08-24] —
+   `resolve_address()` used to check only that a mailbox was deliverable,
+   never that it belonged to the person Agent 1 named. Applying
+   company-c.io's `{first}{l}` pattern to the intended contact produced
+   `wrong.mailbox@company-c.io`, a real mailbox verified at score 100 belonging to
+   someone else. Caught by hand before sending. Fix: `confirm_pattern()`
+   now returns the per-address names from Hunter's domain-search response
+   instead of discarding them, and `_name_conflict()` (`outreach/verify.py`)
+   checks a candidate or fallback address against that list before
+   `resolve_address` will return it — a rendered or observed address that
+   Hunter already attributes to a different name is refused, the same way
+   a role account already was.
 2. **Agent 1's reasoning is discarded** [OPEN] — `source_notes` explains
    which sources were used and what stayed uncertain, and nothing stores it,
    so a draft cannot be reviewed for *why* that contact was chosen. Needs a
