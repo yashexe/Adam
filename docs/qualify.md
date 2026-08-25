@@ -330,13 +330,39 @@ wants "3+ years" — under the new rule that's eligible (`3 <= 3`), matching
 what actually happened (full onsite loop). The rule as implemented does
 not contradict the one real data point available.
 
+## Visa-sponsorship hard eligibility (2026-08-25)
+
+The gap noted below as "not yet confirmed to be worth the complexity on a
+single observed instance" got a second instance the same day: reviewing
+the top-scored postings from a fresh run by hand, company-e (score 92) stated
+"US citizenship required; no visa sponsorship available." Yash's reaction
+was unambiguous: "if they ask US citizenship theres no point moving
+forward." Two real postings (company-p, company-e) is enough — implemented as
+a fourth hard rule, same tier as the other three:
+
+- `qualify/eligibility.py` gained `check_visa_sponsorship`: a posting
+  whose extracted `visa_sponsorship` is `"no"` is ineligible. Silent on
+  the question is eligible — same reasoning as the years rule, absence of
+  a statement isn't a claim it's unavailable.
+- `qualify/extractor.py`'s phrase list extended beyond "no visa" /
+  "unable to sponsor" / "do not sponsor" to also catch "citizenship
+  required" / "must be a us citizen" / "us citizens only" — a posting can
+  refuse sponsorship by demanding citizenship without ever using the word
+  "visa."
+- `qualify/profile.py`'s `NEEDS_VISA_SPONSORSHIP` flipped `False` → `True`.
+  It had been left `False` specifically to award the `preferences_fit`
+  visa sub-score's 2 points unconditionally — the same "soft signal buries
+  a hard fact" mistake the years gate fixed hours earlier, just worth 2
+  points instead of the 10 experience_fit carries.
+- Fixed along the way: `_score_preferences_fit`'s visa sub-score read
+  `job_data.get("visa_sponsorship")`, but nothing ever set that key on
+  `job_data` — the field only ever existed on `extracted_reqs`, computed
+  by the extractor. The sub-score was silently inert regardless of the
+  `NEEDS_VISA_SPONSORSHIP` flag's value. Now reads `extracted_reqs`.
+
 ## What's explicitly not considered
 
 Anything not in the dimension table above — this gate does not currently
-weigh company stage/funding recency, interview-process length, visa
-sponsorship policy, or anything Paraform's richer data captures (deferred,
-see `docs/decisions.md`). Sponsorship in particular is a hard eligibility
-fact, not a soft fit signal, and QUALIFY currently has no way to represent
-"disqualifying" separately from "low-scoring" — worth a real decision if
-sponsorship-blocked postings turn out to be common, not yet confirmed to
-be worth the complexity on a single observed instance (company-p, above).
+weigh company stage/funding recency, interview-process length, or
+anything Paraform's richer data captures (deferred, see
+`docs/decisions.md`).

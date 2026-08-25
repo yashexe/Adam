@@ -25,7 +25,7 @@ import sys
 
 from qualify.boards import job_data_for
 from qualify.candidates import fetch_candidates
-from qualify.eligibility import check_title, check_years
+from qualify.eligibility import check_title, check_visa_sponsorship, check_years
 from qualify.extractor import heuristic_extract_requirements
 from qualify.profile import PREFERENCES, PROFILE
 from qualify.scorer import score_job
@@ -58,6 +58,8 @@ def score_row(row: dict, *, refresh: bool = False) -> dict | None:
 
     extracted_reqs = heuristic_extract_requirements(job_data["description_text"])
     if not check_years(extracted_reqs.get("years_experience_min"))[0]:
+        return None
+    if not check_visa_sponsorship(extracted_reqs.get("visa_sponsorship"))[0]:
         return None
     judged = cached_score(row["platform"], row["job_id"])
     total, breakdown = score_job(

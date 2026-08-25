@@ -50,10 +50,11 @@ came from: `harvest/NOTES.md`. Why each fork was resolved the way it was:
 - Nothing sends without live, explicit human/chat approval — no exception,
   regardless of how confident any agent is.
 - Outreach is independent of applying — never gated behind "did I apply."
-- No sector filter layered on top of the QUALIFY score. The three hard
+- No sector filter layered on top of the QUALIFY score. The four hard
   eligibility rules in `qualify/eligibility.py` (full-time only, no
-  frontend-titled roles, no stated minimum above his years — 2026-08-25)
-  are the deliberate exception and must stay tiny.
+  frontend-titled roles, no stated minimum above his years, no stated
+  visa-sponsorship refusal / citizenship requirement — all 2026-08-25
+  except the first two) are the deliberate exception and must stay tiny.
 - Data lives in ashby-ny-tracker's `tracker.db` directly — no separate DB.
 - Contact targets are ranked by who is likeliest to reply, not by
   seniority. Recruiters are a first-class target, second only to a named
@@ -137,6 +138,16 @@ matches and correctly closed out a company via the prior-contact check
    from the denominator — a same-titled posting judged properly elsewhere
    scored 12. Fix: `SKILL.md` Step 1 now runs `judge` on the window and
    saves the result before calling `prepare`, every time.
+7. **Visa sponsorship was a soft 2-point signal, not a hard fact**
+   [FIXED 2026-08-25] — hand-reviewing the freshly-judged top scorers
+   turned up company-e (92, Founding Engineer) stating "US citizenship
+   required; no visa sponsorship available." Yash: "if they ask US
+   citizenship theres no point moving forward." `qualify/eligibility.py`
+   gained a fourth hard rule, `check_visa_sponsorship`; `NEEDS_VISA_SPONSORSHIP`
+   in `qualify/profile.py` flipped `False` → `True`; a wiring bug that left
+   the old soft `preferences_fit` visa sub-score permanently inert
+   (reading a `job_data` key nothing ever set) was fixed along the way.
+   Full derivation: `docs/qualify.md`, "Visa-sponsorship hard eligibility".
 
 The profile no longer blocks anything — it is hand-written in
 `qualify/profile.py` from the current resume, and Instaply's `parser.py` was

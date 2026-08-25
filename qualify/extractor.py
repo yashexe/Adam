@@ -85,7 +85,10 @@ def heuristic_extract_requirements(job_text: str) -> dict:
         result["visa_sponsorship"] = "unknown"
     elif any(
         phrase in text
-        for phrase in ("no visa", "unable to sponsor", "do not sponsor")
+        for phrase in (
+            "no visa", "unable to sponsor", "do not sponsor",
+            "citizenship required", "must be a us citizen", "us citizens only",
+        )
     ):
         result["visa_sponsorship"] = "no"
     elif any(phrase in text for phrase in ("will sponsor", "sponsorship available")):

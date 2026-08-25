@@ -281,6 +281,7 @@ def _score_experience_fit(
 def _score_preferences_fit(
     job_data: dict,
     preferences: dict,
+    extracted_reqs: dict | None = None,
 ) -> DimensionScore:
     """Preferences fit — weight 15: location 5, remote 4, salary 4, visa 2.
 
@@ -343,7 +344,7 @@ def _score_preferences_fit(
         earned += 2
         possible += 2
     else:
-        visa = (job_data.get("visa_sponsorship") or "unknown").lower()
+        visa = ((extracted_reqs or {}).get("visa_sponsorship") or "unknown").lower()
         if visa in ("yes", "no"):
             earned += 2 if visa == "yes" else 0
             possible += 2
@@ -436,7 +437,7 @@ def score_job(
         ),
         "required_skills_fit": _score_required_skills_fit(profile, extracted_reqs),
         "experience_fit": _score_experience_fit(profile, extracted_reqs),
-        "preferences_fit": _score_preferences_fit(job_data, preferences),
+        "preferences_fit": _score_preferences_fit(job_data, preferences, extracted_reqs),
         "domain_company_fit": _score_domain_company_fit(
             job_data, profile, extracted_reqs,
         ),

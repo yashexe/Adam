@@ -43,11 +43,15 @@ DOMAINS = [
     "Security",
 ]
 
-# Left False, which awards the visa sub-dimension's 2 points unconditionally.
-# Set True only if sponsorship is actually required: it makes postings that
-# explicitly say "we do not sponsor" lose those points, and postings silent
-# on the question drop out of the denominator entirely.
-NEEDS_VISA_SPONSORSHIP = False
+# Confirmed directly by Yash 2026-08-25, reacting to a real posting
+# (company-e) stating "US citizenship required; no visa sponsorship
+# available": "if they ask US citizenship theres no point moving
+# forward." A posting saying no is now a hard eligibility failure
+# (qualify/eligibility.py's check_visa_sponsorship), not just a lost
+# preferences_fit point -- that dimension is soft-weighted 2/100 and
+# would have buried an unambiguous disqualifier in noise, the same
+# mistake the years-experience gate fixed a few hours earlier today.
+NEEDS_VISA_SPONSORSHIP = True
 # ---------------------------------------------------------------------------
 
 SKILLS = [

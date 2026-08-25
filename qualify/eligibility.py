@@ -15,15 +15,21 @@ any of them is not a weak match, it is not a match at all:
    naming 4+ isn't a stretch worth scoring — "at that point the range
    doesn't even matter." A posting stating no minimum is eligible; absence
    of a number is not a claim he falls short of one.
+4. **Not "no visa sponsorship" / citizenship required.** Confirmed directly
+   by Yash 2026-08-25, reacting to a real posting (company-e) stating "US
+   citizenship required; no visa sponsorship available": "if they ask US
+   citizenship theres no point moving forward." A posting silent on
+   sponsorship is eligible — silence isn't a claim it's unavailable, same
+   reasoning as rule 3.
 
 This sits uneasily beside the project rule against exclude filters (see
 CLAUDE.md), which exists because a keyword blocklist quietly eats relevant
 postings. That rule is about precision tradeoffs on ambiguous matches.
 These are unambiguous eligibility facts stated directly by the user, so
 they are implemented and kept deliberately tiny. The first two are tested
-against the title alone; the third needs the posting body, so it runs
-after the board fetch rather than before it. Do not grow this file into a
-general-purpose blocklist.
+against the title alone; the third and fourth need the posting body, so
+they run after the board fetch rather than before it. Do not grow this
+file into a general-purpose blocklist.
 """
 
 from __future__ import annotations
@@ -68,6 +74,13 @@ def check_years(years_experience_min: int | None) -> tuple[bool, str]:
     resume update only has to change one number."""
     if years_experience_min is not None and years_experience_min > YEARS_OF_EXPERIENCE:
         return False, f"wants {years_experience_min}+ years, he has {YEARS_OF_EXPERIENCE}"
+    return True, ""
+
+
+def check_visa_sponsorship(visa_sponsorship: str | None) -> tuple[bool, str]:
+    """(eligible, reason). See rule 4 above."""
+    if visa_sponsorship == "no":
+        return False, "states no visa sponsorship / citizenship required"
     return True, ""
 
 
