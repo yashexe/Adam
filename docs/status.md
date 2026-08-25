@@ -53,5 +53,7 @@ ordered list:
 - Whether the `outreach` skill should ever move from human-triggered to
   scheduled is open but not urgent — see `PIPELINE.md`'s execution-model
   section.
-- The re-tuned tier cutoffs are derived from a single 56-posting week;
-  worth re-checking once a few more judged windows accumulate.
+- The re-tuned tier cutoffs were validated same-day against a second
+  ~180-posting sample: the 65 spend bar held (one judge-75 miss out of
+  142 below it); the strong tier carries ~22% Staff-seniority-inflated
+  composites, a known ordering caveat documented in `docs/qualify.md`.

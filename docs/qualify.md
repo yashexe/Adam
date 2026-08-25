@@ -201,12 +201,89 @@ and ~5 worth-a-look per 7 days. If the human approves mainly strong-tier
 contacts, that is roughly 26 companies/month at 2–3 Hunter credits each —
 inside the 100/month tier, which the old bar's ~47/month was not.
 
-Derived from one 56-posting week. Worth re-checking once a few more
-judged windows accumulate, but no longer inherited from a different tool
-for a different job.
+Derived from one 56-posting week; validated the same day against a second
+sample — see below.
+
+## Validation against a second window (2026-08-24, 167 new judgements)
+
+The postings were already on the Pi; only judge scores were missing. All
+unjudged postings from the six normal-flow days of the trailing week were
+judged (167 new, 180 scored total after cache overlap with the tuning
+week — so this is a partial, not fully independent, second sample).
+
+Two burst days (08-21: 934 postings, 08-24: 545) were deliberately
+excluded: those are backfill dumps from companies newly added to the
+tracker (Compass ×60, Jane Street ×56, …), whole boards landing at once.
+The trickle days are the population the gate actually runs on daily.
+
+**What held.** The 65 spend bar: of 142 postings below it, exactly one
+had judge ≥65 (a judge-75 full-stack role at composite 63). The top of
+the ranking is exactly right — nine of the top ten are judge 75–92
+FDE/data-engineering/founding roles.
+
+**What softened.** The empty 70–72 composite gap was a small-sample
+artifact; it filled in. The strong tier (≥72) now holds 23 postings, of
+which 5 (~22%) have judge ≤62 — all the same failure shape: Staff-level
+roles at large companies (company-w ×2, company-x, company-u product, company-y)
+whose deterministic dimensions max out while the judge correctly
+discounts the seniority stretch. Worst case: one company-w posting at
+composite 82 with judge 62, outranking company-z' judge-87 FDE role.
+
+**Decision: cutoffs unchanged.** Moving strong to 75 would remove most of
+that contamination on this sample but would also have demoted two
+judge-72/78 roles from the tuning week — false negatives, the costlier
+error under the broad-gates ethos. The practical consequence is about
+*ordering*, not gating: within the shown list, a Staff-seniority-inflated
+composite can outrank a better-fitting role, so the judge's one-line
+reason shown alongside the ranking is the corrective, not a tighter
+threshold.
+
+## Ground truth: the roles that actually interviewed him (2026-08-24)
+
+The strongest available calibration signal: mine Gmail for real interview
+processes, judge those postings, and see whether the judge's scores track
+what the market actually did. Six genuine processes were found (excluding
+AI-interview platforms, mass invites, and one scam). Scored on the real
+posting text where it exists:
+
+| Role | Judge | Process reached |
+|---|--:|---|
+| company-m, Forward Deployed Engineer | 92 | interviewed (via Paraform) |
+| company-n, Forward Deployed Engineer | 88 | full loop, 3-hour NYC onsite |
+| company-o, Full-Stack SWE (deployed) | 87 | live — technical round scheduled |
+| company-p, Forward Deployed Engineer | 85 | recruiter screen |
+| company-q, Software Engineer (fintech) | 58 | first round, then rejected |
+| company-r, SWE II (finance) | 55 | full loop, rejected at the end |
+| company-s, Python Dev (staffing) | 8 | recruiter screen only |
+
+Score order matches process-depth order seven for seven. The four roles
+the judge rates strong (85–92) are the ones that pursued him — all four
+are forward-deployed/embedded-engineer shapes, the same shape that now
+tops the pipeline's ranking. The two it rates below the 65 line are the
+two that rejected him. company-n is the instructive case: its posting demands
+3+ years customer-facing (a hard miss on paper at 1.2 years), but the
+judge scored the substance — NetSuite/SAP/Salesforce ERP integration work
+in Python — and the market agreed, running him through a full onsite. That
+is the judge weighing substance over stated years, the exact inverse of
+the deterministic dimensions' Staff-inflation failure above.
+
+company-p's posting states no visa sponsorship, now or in the future — a
+hard eligibility fact the gate does not currently screen for at all
+(`qualify/eligibility.py` checks only full-time status and non-frontend
+titles). Worth a note, not a fix forced by one data point: see "What's
+explicitly not considered" below.
+
+Caveats: n=7; the set is survivorship-biased toward roles he chose to
+apply to; interview outcomes reflect more than role fit. These scores were
+not written to the pipeline's cache — they are not tracker postings.
 
 ## What's explicitly not considered
 
 Anything not in the dimension table above — this gate does not currently
-weigh company stage/funding recency, interview-process length, or anything
-Paraform's richer data captures (deferred, see `docs/decisions.md`).
+weigh company stage/funding recency, interview-process length, visa
+sponsorship policy, or anything Paraform's richer data captures (deferred,
+see `docs/decisions.md`). Sponsorship in particular is a hard eligibility
+fact, not a soft fit signal, and QUALIFY currently has no way to represent
+"disqualifying" separately from "low-scoring" — worth a real decision if
+sponsorship-blocked postings turn out to be common, not yet confirmed to
+be worth the complexity on a single observed instance (company-p, above).
