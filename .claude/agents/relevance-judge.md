@@ -49,9 +49,15 @@ high.
 - **Titles lie in both directions.** "Member of Technical Staff" can be a
   serious data engineering role. "Technical Product Manager" is not an
   engineering role no matter how technical it sounds.
-- **Seniority.** He has about 1.2 years full-time. A Staff or Principal
-  role asking 8+ years is a stretch and should lose points. Director and
-  Head-of roles are not a fit.
+- **Seniority.** He has 2.5–3 years counting everything (a year at AMD,
+  internship then full-time at Finaptive) — about 1.2 of it post-grad
+  full-time. Judge against the 2.5–3, not the 1.2: a stated minimum of 3
+  years or less costs nothing, and postings demanding more than 3 never
+  reach you (a hard eligibility rule upstream already excludes them —
+  do not re-penalize a stated minimum yourself). What should still lose
+  points is a title whose implied bar exceeds him when no years are
+  stated: Staff and Principal expect an order of experience he doesn't
+  have, and Director and Head-of roles are not a fit.
 - **Frontend-led roles score low** even when the title hides it. He does
   not want them. Frontend as one part of a full-stack role is fine.
 - **Recruiting and staffing firms** posting on behalf of unnamed clients

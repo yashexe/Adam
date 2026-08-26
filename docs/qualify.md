@@ -179,6 +179,28 @@ them and scored them 3-16.
 The tier cutoffs became calibratable once the score measured the right
 thing, and were re-tuned the next day — see below.
 
+**Judge stability, measured (2026-08-26):** a stratified 40-posting sample
+re-judged fresh against its cached scores gave a test-retest rank
+correlation of +0.97, 35/40 within ±10, and 3–4 band flips at the
+decision-relevant lines — stable enough to rank on, with a ±7 per-score
+jitter and a small batch-composition drift worth anchoring if the judge
+ever carries more weight.
+
+**Years framing corrected (2026-08-26):** until this date the judge's
+prompt (and `PROFILE.md`) said "about 1.2 years full-time" — the post-grad
+tenure alone, not the 2.5–3 counting the AMD year and internships that
+Yash confirmed on 2026-08-25 and that the `check_years` eligibility rule
+uses. The judge was double-penalizing senior-titled postings that
+eligibility had already vetted (a stated 3-year minimum is fine by his own
+policy). The prompt now states both numbers, says to judge against 2.5–3,
+and explicitly defers stated-minimum enforcement to the upstream
+eligibility rule. **Judgements cached before this date carry the stricter
+1.2-years framing** — they are not invalidated (ordering was 7/7 right on
+ground truth regardless), but borderline senior-titled postings judged
+before 2026-08-26 sit a few points lower than the corrected prompt would
+put them, and a wholesale re-judge is deliberately deferred to whenever
+the judge next changes shape rather than spent now.
+
 ## Where the cutoffs come from (2026-08-24)
 
 The full judged sample (56 postings, judgements cached in

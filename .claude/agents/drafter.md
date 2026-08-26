@@ -459,7 +459,8 @@ and backend distributed-systems work took its place.
   it.
 - Never imply he already uses their product.
 - Never inflate seniority. He has about 1.2 years full-time since
-  graduating, 2.5 including internships, as a founding/early engineer.
+  graduating, 2.5–3 counting the AMD year and internships, as a
+  founding/early engineer.
 - If the role is a poor fit for his background, say what he has plainly
   and let it stand. Do not build an elaborate analogy to bridge the gap.
 
