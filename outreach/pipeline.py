@@ -32,13 +32,13 @@ from outreach.gmail_draft import create_draft
 from outreach.history import prior_contacts
 from outreach.verify import resolve_address, verify_email
 
-# Kept at 65 deliberately after the 2026-08-24 re-tune (docs/qualify.md):
-# below 63 the judge rates postings <=27 almost uniformly, so 65 already
-# fences the noise, and the 63-66 gray zone is where the composite cannot
-# order postings correctly anyway (a judge-40 IT role outscored a judge-55
-# full-stack role there). Raising the bar buys no precision the human list
-# review doesn't already provide, and recall is the stated ethos.
-DEFAULT_MIN_SCORE = 65
+# Re-derived 2026-08-26 with the scorer rebalance (docs/qualify.md, "Dead
+# weight in the deterministic composite"): on the 305-posting validation
+# corpus, 64 is the highest bar that loses zero judge-strong postings —
+# the lowest judge>=70 composite sits exactly at 64 (company-ae, judge 78)
+# — while judge<50 leakage falls from 20 at the old distribution to 10.
+# Recall stays the ethos: misses are silent, leaks get one human glance.
+DEFAULT_MIN_SCORE = 64
 
 
 @dataclass

@@ -18,21 +18,31 @@ location filter beyond what ashby-ny-tracker already applied upstream. See
 A weighted composite, 0–100, computed only over dimensions that have real
 data (missing data lowers confidence, not the score itself):
 
+Weights as of the 2026-08-26 rebalance (see "Dead weight in the
+deterministic composite" below for what changed and why):
+
 | Dimension | Weight | What it measures |
 |---|---:|---|
 | Semantic fit | 30 | LLM judgement of profile/posting fit, not embeddings — resolved, see "Semantic fit, implemented" below |
-| Role/title fit | 15 | Target role family, title similarity |
-| Required skills fit | 15 | Required skills found in the profile |
-| Experience fit | 10 | Years, scope vs. posting's stated minimum |
-| Preferences fit | 15 | Location, remote policy, salary, visa — sub-weighted 5/4/4/2 |
+| Role/title fit | 25 | Target role family, title similarity |
+| Required skills fit | 25 | Required skills found in the profile — UNKNOWN when the posting yields fewer than 3 extracted skills |
+| Preferences fit | 5 | Location, remote policy, salary, visa — raw sub-scores 5/4/4/2, rescaled |
 | Domain/company fit | 5 | Industry/domain overlap |
 | Preferred-skills bonus | 10 | Nice-to-have skills present |
+
+(Experience fit, weight 10 in the Instaply original, was deleted on
+2026-08-26 — the `check_years` hard eligibility rule reads the same
+posting minimum against the same profile years, so by the time a posting
+reached the scorer this dimension could only return UNKNOWN or full
+marks.)
 
 **Non-compensatory gate:** if required-skills coverage is under 30%, the
 total score is capped at 49 regardless of how well everything else scores —
 location and preference points cannot buy back a fundamental skills
-mismatch. Ported unchanged; this was a calibrated, tuned rule in the
-original, not something to casually adjust.
+mismatch. Ported from Instaply as a calibrated, tuned rule; since
+2026-08-26 it inherits the dimension's ≥3-skill evidence floor, so it can
+no longer fire off a coverage ratio computed over one or two extracted
+keywords.
 
 ## Profile source — and the freshness requirement
 
@@ -50,24 +60,29 @@ hand-written directly from the current resume in `qualify/profile.py`
 `parser.py` was deliberately not revived for a one-resume input. The gate
 runs against the current profile.
 
-## Decision tiers (re-tuned 2026-08-24)
+## Decision tiers (re-tuned 2026-08-24, re-derived 2026-08-26)
 
-- 72–100: strong match
-- 65–71: worth a look
-- <65: not strong enough to spend an Agent 1 call on
+- 69–100: strong match
+- 64–68: worth a look
+- <64: not strong enough to spend an Agent 1 call on
 
 Instaply's inherited cutoffs were 85/65 — thresholds for a different
 purpose (deciding whether to *email the user*) over a different score
 distribution. Once semantic fit landed, 85 became unreachable: the judge's
 0-100 maps onto the scorer's SEMANTIC_SIM_FLOOR..CEIL band, which
 compresses the composite, and the maximum observed over the 56-posting
-judged sample is 83. Nothing was ever "strong" under the old tier.
+judged sample is 83. Nothing was ever "strong" under the old tier. The
+2026-08-24 re-tune set 72/65 empirically from the joint composite/judge
+distribution (see "Where the cutoffs come from" below).
 
-The re-tune is empirical, from the joint distribution of composite score
-and judge score over that sample (see "Where the cutoffs come from"
-below). `DEFAULT_MIN_SCORE` in `outreach/pipeline.py` stays 65 — no longer
-inherited, now measured: below 63 the judge rates postings ≤27 almost
-uniformly, so 65 already fences the noise.
+The 2026-08-26 scorer rebalance shifted the whole composite distribution
+down about 4 points, so both cutoffs were re-derived on the 305-posting
+validation corpus rather than assumed to survive: the judge-confirmed
+strong cluster now bottoms out at 69, and 64 is the highest spend bar that
+loses zero judge≥70 postings (the lowest one sits exactly at 64).
+`DEFAULT_MIN_SCORE` in `outreach/pipeline.py` moved 65→64 to match — see
+"Dead weight in the deterministic composite" below for the full
+derivation.
 
 ## Where an LLM is involved
 
@@ -369,6 +384,107 @@ mention US citizenship, should we back off."
   an objection the reader never raised is exactly the "expects to be
   doubted" failure mode the drafter's contract already warns against
   elsewhere.
+
+## Dead weight in the deterministic composite (2026-08-26)
+
+Hand-tracing company-ab's Forward Deployed Engineer posting
+(a recruiter pull, judged 72) through the scorer exposed a chain of
+problems in the deterministic 70 points, each confirmed by executing the
+real code rather than by inspection:
+
+- **`taxonomy.contains_keyword` treated `-` as a word boundary**, so
+  "go-live" and "go-to-market" both matched the `Go` language keyword.
+  company-ab's posting mentions no real skill keywords at all; its entire
+  extracted `required_skills` list was `["Go"]` from "go-live", he
+  "missed" it, and the 0/1 coverage ratio fired the non-compensatory gate
+  — an otherwise-~68 posting capped at 49 by a false positive. GTM
+  phrasing is common in exactly the FDE postings this pipeline targets
+  most.
+- **The gate had no minimum-evidence floor** — a coverage ratio over one
+  extracted keyword was treated as seriously as one over fourteen.
+- **`experience_fit` (weight 10) had become structurally dead**: the
+  `check_years` eligibility rule (added 2026-08-25) excludes any posting
+  whose stated minimum exceeds his years, and the dimension read the same
+  extracted minimum against the same profile years, so it could only ever
+  return UNKNOWN or a perfect 10 — a constant, quietly inflating every
+  score that reached the scorer.
+- **`preferences_fit` (weight 15) had 10 of its 15 raw points
+  unconditionally free** under the current profile (`remote_policy:
+  "any"`, `min_salary: None`, `needs_visa_sponsorship: False`); only the
+  5-point location sub-score ever discriminated — and even that drops out
+  of the denominator when a posting lists no locations, letting a posting
+  score 15/15 on zero signal.
+
+### The fix
+
+Five changes to `qualify/taxonomy.py` and `qualify/scorer.py`:
+
+1. `HYPHEN_SENSITIVE_KEYWORDS = {"go"}` — for keywords in this set (and
+   only these), a hyphen is a joiner, not a boundary. Deliberately not
+   blanket: "AWS-based", "LLM-powered", "REST-based" are real mentions a
+   global hyphen rule would break. `go` is the one keyword that is also an
+   ordinary English verb.
+2. `REQUIRED_SKILLS_MIN_EVIDENCE = 3` — a posting yielding fewer than 3
+   extracted skills gets `required_skills_fit = UNKNOWN` (weight dropped
+   from the denominator) instead of a ratio over noise, and the gate
+   consequently cannot fire. This went further than first planned (the
+   plan was to guard only the gate): validation showed the ungated
+   dimension was equally noisy in both directions — a judge-78 Founding
+   Engineer posting scored 0/25 off a 2-keyword sample (stranding it at
+   55), while 43 of 305 corpus postings scored a free 25/25 by matching
+   one or two generic keywords (three judge-15 iOS postings rode that to
+   the spend bar).
+3. `experience_fit` deleted outright, not zero-weighted — it can never
+   disagree with `check_years` by construction, so there is no future in
+   which it becomes a live signal again.
+4. `preferences_fit` weight 15→5. The sub-score logic is untouched on
+   purpose: the free points trace to profile tunables that are documented
+   as changeable, and if they change the sub-scores come back to life at
+   a weight that now matches their real discriminating range.
+5. The freed 20 points went to `role_title_fit` (15→25) and
+   `required_skills_fit` (15→25). The earlier worry that role_title was
+   near-constant did not survive contact with the data: over the corpus it
+   correlates with the judge at r=+0.48, the strongest deterministic
+   dimension by a wide margin (required_skills sits at +0.11), while its
+   known failure mode (full marks on a title-substring match like
+   "Software Engineer - Mobile, iOS") argues against pushing it above
+   parity with required_skills.
+
+### Validation
+
+Offline before/after over the real corpus: every key in
+`.cache/semantic.json` (441 judged postings) resolved against the cached
+board responses in `.cache/boards/` directly — bypassing the 24h TTL so
+historical text stays usable — rebuilt into `job_data` by the real
+builders and scored by the real path. 305 postings survive eligibility
+(134 excluded by years, 2 by citizenship, identical before and after).
+
+- Mean composite delta −4.7 (the dead always-full dimensions leaving the
+  numerator), median −4.
+- Gate firings 6 → 1; every false-positive-driven cap gone, the one
+  survivor is a genuine <30% coverage over a real sample.
+- At the new spend bar of 64: **zero** judge≥70 postings below the bar
+  (the old scorer at its old bar stranded a judge-78 posting; the min
+  judge≥70 composite now sits exactly at 64), and judge<50 leakage
+  halved from 20 to 10 — what leaks is dominated by the known
+  Staff-seniority caveat cluster (company-ac ×3) documented in the
+  2026-08-24 validation section.
+- Tier cutoffs re-derived on the same corpus rather than assumed:
+  strong 72→69 (the judge≥80 cluster bottoms at 69, with two stragglers
+  at 68 and 65), spend bar 65→64. `TIERS` in `qualify_run.py` and
+  `DEFAULT_MIN_SCORE` in `outreach/pipeline.py` updated together.
+- Ground truth: the company-m Forward Deployed Engineer posting (the
+  one interview-verified posting with saved text in-repo,
+  `harvest/from_paraform_pipeline/ny_roles_mds/`) scores 94, comfortably
+  strong — and its "visa sponsorship not available" line correctly does
+  not disqualify it under the narrow citizenship-only eligibility rule.
+
+Still open, deliberately: `preferred_skills_bonus` only detects a
+preferred section via the literal headers "preferred"/"nice to have"/
+"bonus" (safe — a miss returns UNKNOWN, never penalizes), and it shares
+the small-sample noise the required dimension just lost its exposure to.
+Lower stakes at weight 10 and bonus-shaped; a synonym-expansion follow-up,
+not part of this pass.
 
 ## What's explicitly not considered
 

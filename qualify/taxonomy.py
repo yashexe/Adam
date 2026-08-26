@@ -213,11 +213,20 @@ def canonical_skill(skill: str) -> tuple[str, str] | None:
     return None
 
 
-def contains_keyword(text: str, keyword: str) -> bool:
+# Keywords that are also ordinary English words inside hyphenated compounds
+# ("go-live", "go-to-market"): for these, a hyphen is a joiner, not a word
+# boundary. Deliberately not applied to every keyword — "AWS-based",
+# "LLM-powered", "REST-based" are real mentions that hyphen-as-joiner
+# matching would miss.
+HYPHEN_SENSITIVE_KEYWORDS = {"go"}
+
+
+def contains_keyword(text: str, keyword: str, *, strict_hyphen: bool = False) -> bool:
     """Match a keyword without substring false positives."""
     normalized = keyword.lower()
+    boundary = r"A-Za-z0-9+#\-" if strict_hyphen else r"A-Za-z0-9+#"
     pattern = re.compile(
-        r"(?<![A-Za-z0-9+#])" + re.escape(normalized) + r"(?![A-Za-z0-9+#])",
+        rf"(?<![{boundary}])" + re.escape(normalized) + rf"(?![{boundary}])",
         re.IGNORECASE,
     )
     return bool(pattern.search(text.lower()))
@@ -235,7 +244,9 @@ def extract_skill_hits(text: str) -> list[tuple[str, str]]:
             continue
         if display == "REST" and "rest apis" in seen:
             continue
-        if contains_keyword(text, keyword):
+        if contains_keyword(
+            text, keyword, strict_hyphen=keyword in HYPHEN_SENSITIVE_KEYWORDS
+        ):
             hits.append((display, category))
             seen.add(canonical)
     return hits

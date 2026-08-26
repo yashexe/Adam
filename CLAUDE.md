@@ -122,10 +122,11 @@ matches and correctly closed out a company via the prior-contact check
    sees it.
 3. **Tier cutoffs** [FIXED 2026-08-24] — re-tuned empirically from the
    joint composite/judge distribution over the 56-posting judged sample:
-   strong is now 72 (Instaply's 85 sat above the entire observed
+   strong became 72 (Instaply's 85 sat above the entire observed
    distribution — max composite is 83), and the 65 spend bar was kept
    deliberately after measuring it, no longer inherited. Full derivation:
-   `docs/qualify.md`, "Where the cutoffs come from".
+   `docs/qualify.md`, "Where the cutoffs come from". Re-derived again
+   2026-08-26 after the scorer rebalance (item 8): now 69/64.
 4. **Execution model** [DECIDED] — Claude Code-orchestrated on this Mac,
    human-triggered via the `outreach` skill, reusing the existing
    subscription rather than a new metered API. Built and running, not just
@@ -161,6 +162,23 @@ matches and correctly closed out a company via the prior-contact check
    sub-score permanently inert (reading a `job_data` key nothing ever
    set) was fixed along the way. Full derivation: `docs/qualify.md`,
    "Visa-sponsorship hard eligibility".
+8. **~20 of the deterministic 70 points were dead weight** [FIXED
+   2026-08-26] — hand-tracing a recruiter-pulled FDE posting exposed four
+   compounding problems: the keyword matcher treated `-` as a boundary
+   ("go-live" matched the `Go` language, and that lone false positive
+   fired the skills gate, capping a ~68 posting at 49); the gate had no
+   minimum-evidence floor; `experience_fit` had become a constant once
+   `check_years` landed; and `preferences_fit` had 10 of 15 raw points
+   unconditionally free under the current profile. Fix: hyphen handling
+   made keyword-specific (`HYPHEN_SENSITIVE_KEYWORDS`), required-skills
+   samples under 3 extracted keywords now score UNKNOWN instead of noise
+   (`REQUIRED_SKILLS_MIN_EVIDENCE`), `experience_fit` deleted,
+   `preferences_fit` cut to 5, and the freed 20 points moved to
+   role_title_fit and required_skills_fit (25/25). Validated offline
+   against 305 cached judged postings: judge<50 leakage at the spend bar
+   halved, zero judge≥70 postings below it, tiers re-derived to 69/64.
+   Full derivation: `docs/qualify.md`, "Dead weight in the deterministic
+   composite".
 
 The profile no longer blocks anything — it is hand-written in
 `qualify/profile.py` from the current resume, and Instaply's `parser.py` was
@@ -187,7 +205,7 @@ Full reasoning for each: `docs/decisions.md`.
 ```bash
 python3 qualify_run.py --days 7 --limit 25          # score recent matches
 python3 qualify_run.py --days 3 --detail            # with per-dimension breakdown
-python3 qualify_run.py --days 7 --min-score 65 --json
+python3 qualify_run.py --days 7 --min-score 64 --json
 ```
 
 Reads the live tracker DB on the Pi read-only over SSH, writes nothing, and

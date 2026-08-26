@@ -3,9 +3,9 @@ Job descriptions, fetched from the public board APIs.
 
 `seen_jobs` stores only what the tracker derived from a posting
 (funding_hint, comp_summary) — never the description itself. Without the
-description the scorer loses required_skills_fit, experience_fit, the
-preferred-skills bonus, and most of domain_company_fit: four of its seven
-dimensions, and every dimension that actually discriminates between two NY
+description the scorer loses required_skills_fit, the preferred-skills
+bonus, and most of domain_company_fit — and the semantic judge has nothing
+to read: every signal that actually discriminates between two NY
 engineering postings. So the text has to be re-fetched.
 
 Both platform modules in the tracker already pull it (ashby_api.py asks for

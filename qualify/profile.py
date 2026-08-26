@@ -22,11 +22,12 @@ from __future__ import annotations
 # Confirmed directly by Yash 2026-08-25: 2.5-3 years counting everything
 # (AMD May 2023-Apr 2024, Finaptive intern Feb-May 2025, Finaptive
 # full-time Jun 2025-present). 3 was the resume-inferred estimate this
-# replaced a defensible-middle guess of 2 with; it's also the ceiling
+# replaced a defensible-middle guess of 2 with; it's the ceiling
 # `qualify/eligibility.py`'s check_years uses to hard-exclude postings
-# wanting 4+. It matters for scoring too: `_score_experience_fit` compares
-# this directly against a posting's stated minimum, and a posting asking
-# 5+ years scores 0.33 at 3 versus 0.13 at 2.
+# wanting 4+. (Until 2026-08-26 it also fed the scorer's experience_fit
+# dimension; that dimension was deleted once check_years made it a
+# constant — see docs/qualify.md, "Dead weight in the deterministic
+# composite".)
 YEARS_OF_EXPERIENCE = 3
 
 # Must be keys of taxonomy.DOMAIN_KEYWORDS — `_score_domain_company_fit`

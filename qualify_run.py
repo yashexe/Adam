@@ -8,13 +8,14 @@ LLM: every number below is deterministic and reproducible.
 
     python3 qualify_run.py --days 7 --limit 25
     python3 qualify_run.py --days 3 --detail
-    python3 qualify_run.py --days 7 --min-score 65 --json
+    python3 qualify_run.py --days 7 --min-score 64 --json
 
-Note on the score itself: semantic_fit (weight 30) is deliberately left
-unscored — `score_job` treats an absent embedding as an unknown dimension,
-dropping it from the denominator instead of zeroing it, so the open
-sentence-transformers-vs-LLM decision stays open without distorting
-anything. `confidence` reports how much dimension weight actually had data.
+Note on the score itself: semantic_fit (weight 30) is read from the cached
+LLM judgements in `.cache/semantic.json`, never computed here — an unjudged
+posting scores with that dimension dropped from the denominator entirely
+(the `outreach` skill judges a window before preparing it; this standalone
+view does not). `confidence` reports how much dimension weight actually
+had data.
 """
 
 from __future__ import annotations
@@ -35,13 +36,13 @@ from qualify.semantic import cached_score, cached_similarity
 # user" rather than "spend an agentic contact-search call" — a different
 # cost/benefit, so treat them as a starting point to calibrate against real
 # output, not as settled thresholds.
-# Re-tuned 2026-08-24 against the 56-posting judged sample (docs/qualify.md).
-# Instaply's inherited 85 sat above the entire observed distribution (max
-# composite: 83) because the semantic dimension maps the judge's 0-100 onto
-# the scorer's similarity band. The judge-confirmed strong cluster bottoms
-# out at 73 with an empty gap down to 69; 72 splits that gap with a point
-# of slack for jitter.
-TIERS = ((72, "strong"), (65, "worth a look"), (0, "below bar"))
+# Re-tuned 2026-08-24 against the 56-posting judged sample, then re-derived
+# 2026-08-26 after the scorer rebalance shifted the whole distribution down
+# ~4 points (docs/qualify.md, "Dead weight in the deterministic composite").
+# On the 305-posting validation corpus the judge-confirmed strong cluster
+# now bottoms out at 69 (two stragglers below at 68 and 65), and 64 is the
+# highest spend bar that loses zero judge-strong postings.
+TIERS = ((69, "strong"), (64, "worth a look"), (0, "below bar"))
 
 
 def tier_for(score: int) -> str:

@@ -10,7 +10,8 @@ reduced when hard filters were uncertain.
 
 A non-compensatory gate caps the score when most required skills are
 missing — location and preference points cannot buy back a fundamental
-skills mismatch.
+skills mismatch. It only fires when the posting yielded enough extracted
+skills for the coverage ratio to be evidence rather than noise.
 """
 
 from __future__ import annotations
@@ -26,9 +27,11 @@ from .taxonomy import canonical_skill
 class _KwLogger:
     """structlog-style kwargs adapter over stdlib logging.
 
-    Instaply used structlog; this shim keeps everything below the imports
-    byte-identical to the harvested original, so the scoring logic stays a
-    verifiable port rather than a rewrite.
+    Instaply used structlog; this shim originally kept everything below the
+    imports byte-identical to the harvested original so the port stayed
+    verifiable. The logic has since diverged deliberately (semantic judge,
+    gate guard, dimension rebalance — see docs/qualify.md), but the shim
+    stays so the surviving Instaply code reads unchanged.
     """
 
     def __init__(self, name: str) -> None:
@@ -42,14 +45,24 @@ logger = _KwLogger(__name__)
 
 # Dimension weights (total 100; freshness is deliberately not a fit signal).
 # Semantic similarity is the primary relevance signal; keyword skill
-# matching is kept at lower weight and still drives the gate.
-# Mirrored in SCORE_DIMENSIONS in src/web/static/app.js — update both.
+# matching drives the gate.
+#
+# Rebalanced 2026-08-26 (see docs/qualify.md, "Dead weight in the
+# deterministic composite"): experience_fit (10) was deleted outright —
+# eligibility's check_years already excludes any posting it could have
+# scored below full marks, so it had become a constant — and
+# preferences_fit dropped 15→5 because with the current profile tunables
+# (remote "any", no salary floor, no sponsorship need) 10 of its 15 raw
+# points were unconditionally free. The freed 20 points went to the two
+# dimensions that actually separate postings, role_title_fit and
+# required_skills_fit. preferences_fit's sub-score logic is untouched, so
+# those points come back to life automatically if the profile tunables
+# change.
 WEIGHTS = {
     "semantic_fit": 30,
-    "role_title_fit": 15,
-    "required_skills_fit": 15,
-    "experience_fit": 10,
-    "preferences_fit": 15,
+    "role_title_fit": 25,
+    "required_skills_fit": 25,
+    "preferences_fit": 5,
     "domain_company_fit": 5,
     "preferred_skills_bonus": 10,
 }
@@ -66,6 +79,17 @@ SEMANTIC_SIM_CEIL = 0.55
 # Required-skills coverage below this ratio caps the total score at GATE_CAP.
 GATE_RATIO = 0.3
 GATE_CAP = 49
+
+# A required-skills sample below this size is no evidence at all: the
+# dimension returns UNKNOWN (its weight drops out of the denominator) and
+# the gate consequently cannot fire. A coverage ratio over one or two
+# extracted keywords is noise in both directions — a single extractor false
+# positive (see taxonomy's HYPHEN_SENSITIVE_KEYWORDS) once produced 0/1 and
+# capped an otherwise-qualifying FDE posting at 49, and on the 305-posting
+# validation corpus 43 postings scored a free 25/25 by matching one or two
+# generic keywords. Measured impact of this floor: docs/qualify.md,
+# "Dead weight in the deterministic composite".
+REQUIRED_SKILLS_MIN_EVIDENCE = 3
 
 
 class DimensionScore(NamedTuple):
@@ -186,7 +210,7 @@ def _score_role_title_fit(
     profile: dict,
     extracted_reqs: dict | None,
 ) -> DimensionScore:
-    """Role/title fit — weight 20. Unknown when the candidate lists no roles."""
+    """Role/title fit — weight 25. Unknown when the candidate lists no roles."""
     max_points = WEIGHTS["role_title_fit"]
     job_title = (job_data.get("title") or "").lower()
 
@@ -236,46 +260,20 @@ def _score_required_skills_fit(
 
     if not required or not candidate_skills:
         return UNKNOWN
+    if len(required) < REQUIRED_SKILLS_MIN_EVIDENCE:
+        return UNKNOWN
 
     matched = _count_skill_matches(required, candidate_skills)
     ratio = matched / len(required)
     return DimensionScore(round(ratio * max_points), max_points, True)
 
 
-def _score_experience_fit(
-    profile: dict,
-    extracted_reqs: dict | None,
-) -> DimensionScore:
-    """Experience fit — weight 15. Unknown when the posting states no requirement."""
-    max_points = WEIGHTS["experience_fit"]
-
-    years_min = (extracted_reqs or {}).get("years_experience_min")
-    if years_min is None:
-        return UNKNOWN
-    try:
-        years_min = int(years_min)
-    except (ValueError, TypeError):
-        return UNKNOWN
-
-    candidate_years = _profile_data(profile).get("years_of_experience")
-    if candidate_years is None:
-        return UNKNOWN
-    try:
-        candidate_years = int(candidate_years)
-    except (ValueError, TypeError):
-        return UNKNOWN
-
-    if candidate_years >= years_min:
-        ratio = 1.0
-    elif candidate_years >= years_min - 1:
-        ratio = 0.8
-    elif candidate_years >= years_min - 2:
-        ratio = 0.55
-    elif candidate_years >= years_min - 3:
-        ratio = 0.33
-    else:
-        ratio = 0.13
-    return DimensionScore(ratio * max_points, max_points, True)
+# _score_experience_fit was deleted 2026-08-26, not just zero-weighted:
+# eligibility's check_years reads the same years_experience_min against the
+# same profile years, so by the time a posting reaches the scorer this
+# dimension could only ever return UNKNOWN or full marks. The two can never
+# disagree by construction, so there is no future in which it becomes a
+# live signal again.
 
 
 def _score_preferences_fit(
@@ -283,7 +281,8 @@ def _score_preferences_fit(
     preferences: dict,
     extracted_reqs: dict | None = None,
 ) -> DimensionScore:
-    """Preferences fit — weight 15: location 5, remote 4, salary 4, visa 2.
+    """Preferences fit — weight 5, rescaled from raw sub-scores of
+    location 5, remote 4, salary 4, visa 2.
 
     A sub-dimension the user has no constraint on counts as satisfied; a
     constraint the job gives no data for is excluded from the denominator.
@@ -362,7 +361,7 @@ def _score_domain_company_fit(
     profile: dict,
     extracted_reqs: dict | None,
 ) -> DimensionScore:
-    """Domain/company fit — weight 10. Unknown when the profile lists no domains."""
+    """Domain/company fit — weight 5. Unknown when the profile lists no domains."""
     max_points = WEIGHTS["domain_company_fit"]
 
     profile_domains: list[str] = _profile_data(profile).get("domains", [])
@@ -436,7 +435,6 @@ def score_job(
             job_data, preferences, profile, extracted_reqs,
         ),
         "required_skills_fit": _score_required_skills_fit(profile, extracted_reqs),
-        "experience_fit": _score_experience_fit(profile, extracted_reqs),
         "preferences_fit": _score_preferences_fit(job_data, preferences, extracted_reqs),
         "domain_company_fit": _score_domain_company_fit(
             job_data, profile, extracted_reqs,
@@ -464,6 +462,9 @@ def score_job(
     breakdown["confidence"] = confidence
 
     # Non-compensatory gate: missing most required skills caps the total.
+    # `known` here already implies a sample of at least
+    # REQUIRED_SKILLS_MIN_EVIDENCE extracted skills — the dimension returns
+    # UNKNOWN below that — so the gate only ever fires on real evidence.
     skills = dimensions["required_skills_fit"]
     if skills.known and skills.points / skills.max_points < GATE_RATIO:
         if total > GATE_CAP:

@@ -17,7 +17,7 @@ just per-stage spikes.
 | Harvest (3 source projects) | done | `harvest/`, see `harvest/NOTES.md` per-component |
 | Execution model | **decided + implemented** | Claude Code-orchestrated on this Mac, human-triggered via the `outreach` skill — see `PIPELINE.md`. Ruled out: hosting it on the Pi (armv7l 32-bit, Node v10.15.2, no `claude` binary — Claude Code needs Node 18+ and doesn't target 32-bit ARM) |
 | Orchestration (`outreach` skill + CLI) | **implemented** | `.claude/skills/outreach/SKILL.md` drives `outreach_run.py` (`prepare` / `judge` / `judge-save` / `finalize` / `status`, backed by `outreach/pipeline.py`). This is the glue between stages that was previously missing. Step 1 now runs `judge`+`judge-save` before `prepare` — until 2026-08-25 the skill never called them at all, so every live run scored on the composite's remaining 70 points with semantic fit silently absent; see `docs/qualify.md` |
-| QUALIFY gate | **implemented and discriminating** | `qualify/` + `qualify_run.py`. Deterministic dimensions plus a batched LLM semantic-fit judgement (`qualify/semantic.py`), now actually invoked by the skill (see above). Top of the ranking is now backend infrastructure and FDE roles; PM, presales, management and hardware roles fall out on their own once judged. Tiers re-tuned 2026-08-24 from the judged sample (strong ≥72, spend bar 65 kept after measurement); third hard eligibility rule (years-of-experience ceiling) added 2026-08-25 — see `docs/qualify.md` |
+| QUALIFY gate | **implemented and discriminating** | `qualify/` + `qualify_run.py`. Deterministic dimensions plus a batched LLM semantic-fit judgement (`qualify/semantic.py`), now actually invoked by the skill (see above). Top of the ranking is now backend infrastructure and FDE roles; PM, presales, management and hardware roles fall out on their own once judged. Third hard eligibility rule (years-of-experience ceiling) added 2026-08-25. Deterministic dimensions rebalanced 2026-08-26 (dead experience_fit deleted, minimum-evidence floor on required skills, keyword-matcher hyphen fix), validated offline against 305 cached judged postings; tiers re-derived to strong ≥69, spend bar 64 — see `docs/qualify.md` |
 | Resume/profile parsing | **done, by hand** | `qualify/profile.py`, written from `Yash_Bhavsar_Resume_08192026.pdf`. Instaply's `parser.py` deliberately not revived: one resume, four fields, no pipeline needed. All 46 skills resolve against `taxonomy.py` |
 | Candidate feed | **implemented** | `qualify/candidates.py` — read-only SSH pull from the Pi's live `tracker.db`. Reproduces poll.py's NY/role predicates because `seen_jobs` holds every posting and `pending_alerts` is cleared after each alert email |
 | Job descriptions | **implemented** | `qualify/boards.py` — fetched from the public Ashby/Greenhouse APIs (the tracker stores no description), cached per company for 24h |
@@ -53,7 +53,8 @@ ordered list:
 - Whether the `outreach` skill should ever move from human-triggered to
   scheduled is open but not urgent — see `PIPELINE.md`'s execution-model
   section.
-- The re-tuned tier cutoffs were validated same-day against a second
-  ~180-posting sample: the 65 spend bar held (one judge-75 miss out of
-  142 below it); the strong tier carries ~22% Staff-seniority-inflated
-  composites, a known ordering caveat documented in `docs/qualify.md`.
+- The tier cutoffs have been re-derived twice from live data (2026-08-24
+  against a second ~180-posting sample, 2026-08-26 against the 305-posting
+  validation corpus after the scorer rebalance; now strong ≥69, spend bar
+  64). The strong tier still carries Staff-seniority-inflated composites,
+  a known ordering caveat documented in `docs/qualify.md`.
