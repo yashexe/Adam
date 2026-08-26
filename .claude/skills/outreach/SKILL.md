@@ -21,16 +21,18 @@ authorization to do anything beyond leaving the draft where it is.
 
 ## Step 1 — judge, then find who is worth contacting
 
-`prepare`'s composite score has a semantic-fit dimension (weight 30 of
-100 — the single largest, and the only one that can tell a Product
-Manager posting from a backend one). It only applies to postings that
-have already been through the `relevance-judge` subagent; an unjudged
-posting scores on the *remaining* 70 points alone, which cannot tell
-customer-facing "technical" roles from engineering ones (see
-`docs/qualify.md`, "Years-of-experience hard eligibility" for a concrete
-case: a Technical Account Manager posting scored 89 this way). **Always
-judge the window before calling `prepare` — never call `prepare` on an
-unjudged window.**
+The `relevance-judge` subagent's 0-100 **is** the QUALIFY score — there
+is no composite around it (docs/qualify.md, "The judge becomes the
+score"). An unjudged posting has no score at all: `prepare` will not
+rank it, only count it in `skipped` as unjudged. **Always judge the
+window before calling `prepare`** — that is what gives `prepare`
+something to rank.
+
+Judge output includes calibration anchors: `judge-save` checks them
+against known bands and prints a WARNING to stderr if the judge has
+drifted. Surface that warning to the user instead of proceeding
+silently — drifted scores mean the whole batch deserves a human glance
+before any spend.
 
 ```bash
 python3 outreach_run.py judge --days 1

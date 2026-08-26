@@ -13,36 +13,36 @@ None on top of the score below — no sector/FinTech-AR-AP filter, no
 location filter beyond what ashby-ny-tracker already applied upstream. See
 `docs/decisions.md`.
 
-## Scoring — harvested from Instaply (`harvest/from_instaply/matching/scorer.py`)
+## Scoring — the judge's 0-100, directly (since 2026-08-26)
 
-A weighted composite, 0–100, computed only over dimensions that have real
-data (missing data lowers confidence, not the score itself):
+The QUALIFY score is the `relevance-judge` subagent's 0-100, batched over
+a window and cached per posting (`qualify/semantic.py`,
+`.claude/agents/relevance-judge.md`). There is no composite around it:
+the Instaply-harvested weighted composite that wrapped the judge for the
+project's first days was measured to be a lossy copy of the judge and
+deleted — the evidence and the deletion are documented in "The judge
+becomes the score" below, and the composite's own history (including the
+2026-08-26-morning rebalance that preceded the deletion by hours) is kept
+in the dated sections underneath it.
 
-Weights as of the 2026-08-26 rebalance (see "Dead weight in the
-deterministic composite" below for what changed and why):
+Each judgement carries a small rubric besides the score — `shape`
+(core-engineering / forward-deployed / customer-facing / research /
+management / non-engineering), `seniority` (fits / stretch / above),
+`domain` (strong / some / none) — plus a one-line `reason`, so ranking
+and review surfaces show *why* without re-reading the posting.
 
-| Dimension | Weight | What it measures |
-|---|---:|---|
-| Semantic fit | 30 | LLM judgement of profile/posting fit, not embeddings — resolved, see "Semantic fit, implemented" below |
-| Role/title fit | 25 | Target role family, title similarity |
-| Required skills fit | 25 | Required skills found in the profile — UNKNOWN when the posting yields fewer than 3 extracted skills |
-| Preferences fit | 5 | Location, remote policy, salary, visa — raw sub-scores 5/4/4/2, rescaled |
-| Domain/company fit | 5 | Industry/domain overlap |
-| Preferred-skills bonus | 10 | Nice-to-have skills present |
+Three frozen calibration postings (`qualify/anchors.py`) ride unlabelled
+in every judge batch: an interview-ground-truth FDE posting (expected
+75-100), an adjacent DevOps/SRE posting (35-70), and a marketing posting
+(0-25). `judge-save` warns when an anchor lands outside its band — the
+drift alarm for a score that now carries everything. Across the 8-batch
+corpus re-judge the anchors scored 82-93 / 48-68 / 2-4 — all in band.
 
-(Experience fit, weight 10 in the Instaply original, was deleted on
-2026-08-26 — the `check_years` hard eligibility rule reads the same
-posting minimum against the same profile years, so by the time a posting
-reached the scorer this dimension could only return UNKNOWN or full
-marks.)
-
-**Non-compensatory gate:** if required-skills coverage is under 30%, the
-total score is capped at 49 regardless of how well everything else scores —
-location and preference points cannot buy back a fundamental skills
-mismatch. Ported from Instaply as a calibrated, tuned rule; since
-2026-08-26 it inherits the dimension's ≥3-skill evidence floor, so it can
-no longer fire off a coverage ratio computed over one or two extracted
-keywords.
+Deterministic code keeps the jobs it is right for: the hard eligibility
+rules (`qualify/eligibility.py` — facts, not fit), extraction for
+eligibility inputs and display metadata (`qualify/extractor.py`), and
+per-company dedup. An unjudged posting has **no score at all** — it is
+surfaced as unjudged, never ranked on partial information.
 
 ## Profile source — and the freshness requirement
 
@@ -60,42 +60,43 @@ hand-written directly from the current resume in `qualify/profile.py`
 `parser.py` was deliberately not revived for a one-resume input. The gate
 runs against the current profile.
 
-## Decision tiers (re-tuned 2026-08-24, re-derived 2026-08-26)
+## Decision tiers (on the judge's scale since 2026-08-26)
 
-- 69–100: strong match
-- 64–68: worth a look
-- <64: not strong enough to spend an Agent 1 call on
+- 70–100: strong match
+- 65–69: worth a look
+- <65: not strong enough to spend an Agent 1 call on
 
-Instaply's inherited cutoffs were 85/65 — thresholds for a different
-purpose (deciding whether to *email the user*) over a different score
-distribution. Once semantic fit landed, 85 became unreachable: the judge's
-0-100 maps onto the scorer's SEMANTIC_SIM_FLOOR..CEIL band, which
-compresses the composite, and the maximum observed over the 56-posting
-judged sample is 83. Nothing was ever "strong" under the old tier. The
-2026-08-24 re-tune set 72/65 empirically from the joint composite/judge
-distribution (see "Where the cutoffs come from" below).
+Derived from the re-judged 303-posting corpus and the interview ground
+truth, on the judge's own scale (see "The judge becomes the score" below
+for the full derivation):
 
-The 2026-08-26 scorer rebalance shifted the whole composite distribution
-down about 4 points, so both cutoffs were re-derived on the 305-posting
-validation corpus rather than assumed to survive: the judge-confirmed
-strong cluster now bottoms out at 69, and 64 is the highest spend bar that
-loses zero judge≥70 postings (the lowest one sits exactly at 64).
-`DEFAULT_MIN_SCORE` in `outreach/pipeline.py` moved 65→64 to match — see
-"Dead weight in the deterministic composite" below for the full
-derivation.
+- **70 (strong)**: the corpus distribution is bimodal — a dense strong
+  cluster runs 72-93 (50 postings) with 69-71 completely empty below it.
+  70 splits the empty gap with a point of slack on each side, the same
+  gap-splitting method the composite-era cutoffs used.
+- **65 (spend bar, `DEFAULT_MIN_SCORE`)**: the judge's scale itself
+  draws this boundary — 65-84 is "a real fit with some distance", 40-64
+  is "adjacent... not one where his specific background is an advantage",
+  and an adjacent posting is not worth a cold email whose premise is a
+  specific story. Both ground-truth rejections (company-q 58, company-r 55)
+  sit below this line; all four postings that pursued him sit far above
+  it (85-92).
+
+Every earlier tier value (Instaply's inherited 85/65, the 2026-08-24
+re-tune to 72/65, the 2026-08-26-morning re-derivation to 69/64) lived on
+the composite's scale and died with it — their histories are preserved in
+the dated sections below.
 
 ## Where an LLM is involved
 
-Two places, both from the harvested `judge.py`, both optional refinements
-on top of the deterministic score:
-- **The blend**: an LLM reads the actual posting + profile and produces its
-  own fit score, blended 60/40 (LLM/deterministic) with the score above.
-- **Semantic-fit dimension** (30 weight, the largest single dimension): the
-  original computed this via a local `sentence-transformers` embedding
-  model. **Resolved** as a direct LLM judgment call instead (consistent
-  with "agentic handles the fuzzy work" rather than standing up a parallel
-  embedding pipeline that adds `sentence-transformers`/`torch` and doesn't
-  belong on the Pi) — see "Semantic fit, implemented" below.
+One place: the relevance judge, whose score is the score. Instaply's
+harvested `judge.py` offered two LLM refinements on top of its
+deterministic composite — a 60/40 blend and an embedding-based
+semantic-fit dimension. The embedding was replaced with a direct LLM
+judgement on 2026-08-23 ("Semantic fit, implemented" below), the blend
+was never revived, and on 2026-08-26 the composite around the judgement
+was deleted entirely ("The judge becomes the score" below) — the
+refinement turned out to be the product.
 
 ## Measured behavior (2026-08-23, 58 live postings)
 
@@ -507,6 +508,89 @@ preferred section via the literal headers "preferred"/"nice to have"/
 the small-sample noise the required dimension just lost its exposure to.
 Lower stakes at weight 10 and bonus-shaped; a synonym-expansion follow-up,
 not part of this pass.
+
+## The judge becomes the score (2026-08-26)
+
+The morning's "Dead weight" rebalance (above) was the third targeted fix
+to the deterministic composite in three days. Asked directly whether the
+Instaply-inherited design was worth keeping at all, the honest answer
+came from measuring rather than arguing, and it killed the composite the
+same day. The evidence, all on real data:
+
+- **Every deviation the composite made from the judge was an error in
+  the same direction.** On the 305-posting offline corpus, the
+  deterministic 70 points promoted 20 postings above the spend bar that
+  the judge rated below 60 — the company-ac Staff cluster ("Staff Software
+  Engineer" substring-matches "Software Engineer" and collects full
+  title marks), an OutSystems developer (judge 30), a Research Engineer
+  (judge 20), Delivery/growth roles — and demoted exactly one borderline
+  judge-65 posting. Zero cases were found of the deterministic layer
+  catching a judge mistake.
+- **The composite was 89% the judge already** (r=+0.886), while its
+  deterministic 70 points alone correlated with the judge at just
+  +0.335. Every tuning pass — including the morning's — amounted to
+  making the deterministic layer agree harder with the judge. The
+  endpoint of that process is the judge.
+- **Ground truth ordered 7-for-7 on the judge alone** ("Ground truth"
+  above), including the company-n case where the judge overruled
+  years-on-paper and the market agreed.
+- **The judge is stable enough to carry the score**: +0.97 test-retest
+  rank correlation on a re-judged 40-posting sample ("Judge stability"
+  above), and all 24 anchor scores across the 8-batch corpus re-judge
+  landed inside their expected bands.
+
+### What changed
+
+- `qualify/scorer.py` deleted. Ranking and tiers run on the judge's
+  0-100 directly (`outreach/pipeline.py`, `qualify_run.py`). An unjudged
+  posting is surfaced as unjudged, never scored on partial information —
+  the failure mode that produced a Technical Account Manager at 89 is
+  structurally gone, not patched.
+- The judge reads 3000 chars of the posting instead of 800, and returns
+  a structured rubric (shape / seniority / domain / reason) alongside
+  the score, so review surfaces stay explainable without a composite
+  breakdown.
+- `qualify/anchors.py`: three frozen calibration postings ride
+  unlabelled in every batch; `judge-save` warns when one scores outside
+  its known band. This is the mitigation for the new single point of
+  failure — a drifted judge announces itself instead of silently
+  reordering the pipeline.
+- `qualify/profile.py` shrank to the one fact deterministic code still
+  reads (`YEARS_OF_EXPERIENCE`, for `check_years`). The judge's profile
+  is `PROFILE.md`, as it always was.
+- Extraction (`extractor.py`, `taxonomy.py`) survives for eligibility
+  inputs and display metadata. Eligibility is unchanged.
+- The 441-entry cache was cleared and the 303 currently-resolvable
+  eligible postings re-judged under the corrected years framing
+  (old-vs-new r=+0.92, mean shift −1.6 — the big movers all carry
+  title-vs-substance reasons in both directions, e.g. a "Software
+  Engineer" title whose body describes a Principal-level anchor role
+  fell 78→22, and an internal-tools builder hidden under a Product
+  title rose 18→72).
+
+### Where the cutoffs come from now
+
+The fresh corpus distribution is bimodal: 99 postings at 0-9, 79 at
+10-19, a thin adjacent band through the 40s-60s, then a dense strong
+cluster from 72 to 93 (50 postings) with **69-71 completely empty**
+below it. 70 splits that gap — the same method the composite-era tiers
+used. 65 is the spend bar because the judge's own scale defines 40-64 as
+"adjacent — not one where his specific background is an advantage", an
+adjacent posting is not worth a cold email whose premise is a specific
+story, and the ground truth agrees: both rejections below the line
+(55, 58), all four pursuits far above it (85-92).
+
+### The risk taken, stated plainly
+
+Fit now rests on one LLM call. If the judge prompt, model, or
+`PROFILE.md` degrades, there is no independent scoring layer to catch
+it — by measurement there never effectively was one. The mitigations:
+anchors in every batch (drift announces itself), judgements cached and
+reviewable with reasons attached, hard eligibility still deterministic,
+and the human approval gate before any spend unchanged. What was paid
+for the simplification: three days of composite-tuning machinery,
+deleted; what was bought: the score the ground truth actually validates,
+with its failure modes fenced instead of diluted.
 
 ## What's explicitly not considered
 

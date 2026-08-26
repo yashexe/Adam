@@ -6,7 +6,12 @@ its LLM path: `heuristic_extract_requirements` never called a provider, so
 it ports cleanly and keeps the QUALIFY gate fully deterministic. The LLM
 extraction path and its `src.config.settings` dependency were left behind.
 
-Produces the `extracted_reqs` dict `scorer.score_job` expects.
+Since 2026-08-26 nothing scores on this output — the judge's reading is
+the score (docs/qualify.md, "The judge becomes the score"). What it
+extracts feeds the hard eligibility rules (`years_experience_min`,
+`citizenship_required`, via `qualify/eligibility.py`) and the display
+metadata shown next to a ranked posting; the skills lists are context for
+a human, not points for a scorer.
 """
 
 from __future__ import annotations

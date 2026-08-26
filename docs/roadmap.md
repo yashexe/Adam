@@ -33,7 +33,7 @@ anything that matters.
 ## Offload the deterministic half to the Pi
 
 Checked directly against the code, not assumed: everything in QUALIFY's
-deterministic scoring (`qualify/scorer.py`, `extractor.py`, `eligibility.py`,
+deterministic half (`qualify/extractor.py`, `eligibility.py`,
 `taxonomy.py`), board fetching (`qualify/boards.py`), Hunter verification
 (`outreach/verify.py`), and the SQLite log (`outreach/store.py`) imports
 nothing beyond the standard library plus `python-dotenv`. No `requests`, no
@@ -43,13 +43,15 @@ number, see `docs/qualify.md`), and that discipline means the deterministic
 half is already compatible with the Pi's existing Python 3.7.3 with
 essentially no porting work.
 
-`qualify/candidates.py` already runs a script on the Pi over SSH for the
-NY/role filter — this would extend that same on-demand-remote-script pattern
-to also score and gate candidates remotely, rather than shipping raw rows
-back to the Mac to score locally. A Pi-side cron running this every poll
-cycle would maintain a standing "cleared QUALIFY, ready to judge" queue
-continuously, independent of whether a Claude Code session happens to be
-open. What can't move: the semantic-fit judge (an actual LLM call) and
+Since 2026-08-26 the fit score is the judge's alone (see `docs/qualify.md`,
+"The judge becomes the score"), which narrows what the Pi could take but
+not the value of taking it: `qualify/candidates.py` already runs a script
+on the Pi over SSH for the NY/role filter, and extending that same pattern
+would have the Pi fetch board text and apply the hard eligibility rules
+every poll cycle — maintaining a standing "eligible, text in hand, ready
+to judge" queue continuously, independent of whether a Claude Code session
+happens to be open. The Mac's session then starts at the judge instead of
+at the fetch. What can't move: the judge (an actual LLM call) and
 Agent 1 / Agent 2 (need the `claude` binary) — those stay on the Mac
 regardless of what else moves.
 

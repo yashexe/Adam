@@ -25,7 +25,8 @@ in the loop, which ashby-ny-tracker deliberately has none of.
 
 ```
 [1] Trigger    det.      fresh match from ashby-ny-tracker's poll.py
-[2] Qualify    det.      Instaply-harvested scoring gate — docs/qualify.md
+[2] Qualify    det.+AGENT  hard eligibility rules + the relevance-judge's
+                           score (which IS the score) — docs/qualify.md
 [3] Find contact  AGENT  Agent 1 — docs/agents.md
 [4] Verify     det.      Hunter.io email verification, live — outreach/verify.py
 [5] Draft      AGENT     Agent 2 — docs/agents.md
@@ -87,12 +88,13 @@ What's next, and why: `docs/roadmap.md`.
 All eight stages are implemented and have run end to end against live
 data, orchestrated by the `outreach` Claude Code skill
 (`.claude/skills/outreach/SKILL.md`) driving `outreach_run.py` plus the
-`contact-finder` and `drafter` subagents. Semantic fit (QUALIFY's largest
-dimension) is implemented as a batched LLM judgement, which fixed the
-gate: the top of the ranking went from product-management and intern
-postings to backend infrastructure and forward-deployed roles — but see
-item 6 below, that fix only ran manually until 2026-08-25. Numbers in
-`docs/qualify.md`. Full breakdown: `docs/status.md`.
+`contact-finder` and `drafter` subagents. Since 2026-08-26 the QUALIFY
+fit score is the batched relevance-judge's 0-100 directly — the
+Instaply-inherited deterministic composite around it was measured to be
+a lossy copy of the judge and deleted (item 9 below); hard eligibility
+stays deterministic, and frozen anchor postings in every judge batch
+catch drift. Numbers in `docs/qualify.md`. Full breakdown:
+`docs/status.md`.
 
 The pipeline has already produced real Gmail drafts against live tracker
 matches and correctly closed out a company via the prior-contact check
@@ -179,6 +181,21 @@ matches and correctly closed out a company via the prior-contact check
    halved, zero judge≥70 postings below it, tiers re-derived to 69/64.
    Full derivation: `docs/qualify.md`, "Dead weight in the deterministic
    composite".
+9. **The composite itself was the problem** [REDESIGNED 2026-08-26] —
+   item 8's rebalance was the third composite fix in three days, and
+   measuring whether the deterministic 70 points earned their keep
+   answered no: every deviation they produced against the judge was an
+   error in the same direction (20 bad promotions, 1 borderline demotion,
+   0 catches), the composite correlated +0.89 with the judge it wrapped,
+   ground truth ordered 7/7 on the judge alone, and judge test-retest
+   stability measured +0.97. `qualify/scorer.py` deleted; the
+   relevance-judge's 0-100 IS the QUALIFY score; the judge reads 3000
+   chars, returns a shape/seniority/domain rubric, and three frozen
+   anchor postings in every batch turn drift into a warning instead of a
+   silent reordering. Eligibility, extraction-as-metadata, and dedup stay
+   deterministic. Corpus re-judged (303 postings), tiers on the judge's
+   scale: strong ≥70, spend bar 65. Full derivation and the risk taken:
+   `docs/qualify.md`, "The judge becomes the score".
 
 The profile no longer blocks anything — it is hand-written in
 `qualify/profile.py` from the current resume, and Instaply's `parser.py` was
@@ -199,17 +216,20 @@ Full reasoning for each: `docs/decisions.md`.
 | No sector filter on QUALIFY | job_search_automation's company list was never a real filter to preserve |
 | Recruiters are a first-class contact target | likeliest responder after the hiring manager; the old ban confused the channel with the person |
 | Replies are tracked per contact role | "which contacts respond" was unanswerable, so targeting arguments could never be settled |
+| The judge's 0-100 is the QUALIFY score | the deterministic composite was measured to be a lossy copy of the judge that only subtracted; deleted, not down-weighted |
 
 ## Commands
 
 ```bash
-python3 qualify_run.py --days 7 --limit 25          # score recent matches
-python3 qualify_run.py --days 3 --detail            # with per-dimension breakdown
-python3 qualify_run.py --days 7 --min-score 64 --json
+python3 qualify_run.py --days 7 --limit 25          # rank recent matches by judge score
+python3 qualify_run.py --days 3 --detail            # with the judge's rubric and reason
+python3 qualify_run.py --days 7 --min-score 65 --json
 ```
 
 Reads the live tracker DB on the Pi read-only over SSH, writes nothing, and
-calls no LLM. Requires the Pi to be reachable (see the tracker's `PI.md`).
+calls no LLM — judge scores come from the cache the `outreach` skill fills;
+unjudged postings are listed unranked. Requires the Pi to be reachable (see
+the tracker's `PI.md`).
 
 The full pipeline (QUALIFY through a Gmail draft) is driven by the
 `outreach` skill — ask Claude Code to "run outreach" rather than invoking

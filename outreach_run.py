@@ -40,13 +40,14 @@ def cmd_prepare(args: argparse.Namespace) -> int:
     print(f"\n{len(candidates)} company(s) worth a contact call "
           f"({args.days}d window, score >= {args.min_score})\n")
     if candidates:
-        print(f"{'SCORE':>5}  {'CONF':>4}  {'COMPANY':<20}  TITLE")
+        print(f"{'SCORE':>5}  {'COMPANY':<20}  TITLE")
         print("-" * 92)
         for c in candidates:
-            conf = f"{c.confidence}%" if c.confidence is not None else "-"
-            print(f"{c.score:>5}  {conf:>4}  {c.company_slug[:20]:<20}  {c.job_title[:44]}")
+            print(f"{c.score:>5}  {c.company_slug[:20]:<20}  {c.job_title[:56]}")
+            if c.judge_reason:
+                print(f"{'':>5}  {'':<20}  {c.judge_reason[:64]}")
             if c.funding_hint:
-                print(f"{'':>13}  {'':<20}  funding: {c.funding_hint}")
+                print(f"{'':>5}  {'':<20}  funding: {c.funding_hint}")
     else:
         print("(nothing new above the bar)")
 
@@ -76,9 +77,13 @@ def cmd_judge(args: argparse.Namespace) -> int:
 
 
 def cmd_judge_save(args: argparse.Namespace) -> int:
-    """Persist the judge's JSON array, read from stdin."""
+    """Persist the judge's JSON array, read from stdin. Anchor entries are
+    validated against their expected bands and never cached; a warning
+    here means the judge has drifted and the batch deserves suspicion."""
     scores = json.load(sys.stdin)
-    total = save_scores(scores)
+    total, warnings = save_scores(scores)
+    for w in warnings:
+        print(f"WARNING: {w}", file=sys.stderr)
     print(f"saved {len(scores)} judgement(s); {total} cached in total")
     return 0
 

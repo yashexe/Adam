@@ -22,9 +22,7 @@ from qualify.boards import job_data_for
 from qualify.candidates import fetch_candidates
 from qualify.eligibility import check_citizenship_required, check_title, check_years
 from qualify.extractor import heuristic_extract_requirements
-from qualify.profile import PREFERENCES, PROFILE
-from qualify.scorer import score_job
-from qualify.semantic import cached_similarity
+from qualify.semantic import cached_score
 
 from outreach import store
 from outreach.draft_lint import lint
@@ -32,13 +30,14 @@ from outreach.gmail_draft import create_draft
 from outreach.history import prior_contacts
 from outreach.verify import resolve_address, verify_email
 
-# Re-derived 2026-08-26 with the scorer rebalance (docs/qualify.md, "Dead
-# weight in the deterministic composite"): on the 305-posting validation
-# corpus, 64 is the highest bar that loses zero judge-strong postings —
-# the lowest judge>=70 composite sits exactly at 64 (company-ae, judge 78)
-# — while judge<50 leakage falls from 20 at the old distribution to 10.
-# Recall stays the ethos: misses are silent, leaks get one human glance.
-DEFAULT_MIN_SCORE = 64
+# The score IS the judge's 0-100 since 2026-08-26 (docs/qualify.md, "The
+# judge becomes the score"). 65 is the judge scale's own boundary between
+# "real fit with some distance" and "adjacent — not where his background
+# is an advantage": an adjacent posting is not worth a cold email whose
+# whole premise is a specific story, and both ground-truth rejections sat
+# below this line (55, 58). Must stay consistent with TIERS in
+# qualify_run.py.
+DEFAULT_MIN_SCORE = 65
 
 
 @dataclass
@@ -49,12 +48,19 @@ class Candidate:
     job_title: str
     job_url: str | None
     score: int
-    confidence: int | None
+    judge_reason: str | None
     funding_hint: str | None
     description_text: str = field(repr=False, default="")
 
 
-def _score_row(row: dict) -> tuple[int, int | None, dict] | None:
+def _judge_row(row: dict) -> tuple[int | None, str | None, dict] | None:
+    """(score, reason, job_data) for one eligible posting.
+
+    None when the posting is ineligible or gone from its board;
+    (None, None, job_data) when it is eligible but not yet judged — the
+    caller surfaces those rather than ranking them, because an unjudged
+    posting has no score at all now, not a partial one.
+    """
     job_data = job_data_for(row)
     if job_data is None:
         return None
@@ -63,13 +69,10 @@ def _score_row(row: dict) -> tuple[int, int | None, dict] | None:
         return None
     if not check_citizenship_required(reqs.get("citizenship_required"))[0]:
         return None
-    total, breakdown = score_job(
-        job_data, PREFERENCES, PROFILE, reqs, {"results": {}},
-        # None when this posting has not been judged yet, which the scorer
-        # treats as an unknown dimension rather than a zero.
-        semantic_similarity=cached_similarity(row["platform"], row["job_id"]),
-    )
-    return total, breakdown.get("confidence"), job_data
+    judged = cached_score(row["platform"], row["job_id"])
+    if judged is None:
+        return None, None, job_data
+    return judged["score"], judged.get("reason"), job_data
 
 
 def prepare(
@@ -87,17 +90,21 @@ def prepare(
     skipped: list[str] = []
 
     best: dict[str, Candidate] = {}
+    unjudged = 0
     for row in rows:
-        # Eligibility before scoring: an internship or a frontend-titled
+        # Eligibility before judging: an internship or a frontend-titled
         # role is not a weak match, it is not a match. No point paying for
-        # a board fetch and a score to rank something that cannot be taken.
+        # a board fetch to rank something that cannot be taken.
         eligible, reason = check_title(row.get("title") or "")
         if not eligible:
             continue
-        scored = _score_row(row)
-        if scored is None:
+        judged = _judge_row(row)
+        if judged is None:
             continue
-        total, confidence, job_data = scored
+        total, judge_reason, job_data = judged
+        if total is None:
+            unjudged += 1
+            continue
         if total < min_score:
             continue
         slug = row["company_slug"]
@@ -111,9 +118,14 @@ def prepare(
             job_title=job_data["title"],
             job_url=row.get("url"),
             score=total,
-            confidence=confidence,
+            judge_reason=judge_reason,
             funding_hint=row.get("funding_hint"),
             description_text=job_data["description_text"],
+        )
+    if unjudged:
+        skipped.append(
+            f"{unjudged} eligible posting(s) not judged yet — they have no "
+            f"score and were not ranked; run judge/judge-save on this window"
         )
 
     out: list[Candidate] = []

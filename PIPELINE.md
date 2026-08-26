@@ -43,11 +43,14 @@ to decide on its own.
     A fresh, role-relevant match from ashby-ny-tracker's poll cycle.
     Already exists; this project only reads it.
 
-[2] QUALIFY — deterministic
-    The harvested Instaply scoring gate — a strong-role bar, not just the
-    role-shaped bar the tracker's own alert filter already applies. Full
-    contract: docs/qualify.md. Profile re-parsed from the current resume
-    (qualify/profile.py) — no longer stale.
+[2] QUALIFY — deterministic eligibility + LLM judge
+    Hard eligibility rules (facts: employment type, title, stated years,
+    citizenship) run as deterministic code; the fit score is the
+    relevance-judge's 0-100 directly, batched and cached per posting,
+    with frozen anchor postings in every batch to catch drift. The
+    Instaply-harvested deterministic composite that used to wrap the
+    judge was deleted 2026-08-26 after measurement showed it only
+    subtracted — full contract and the evidence: docs/qualify.md.
     [DECIDED]: no sector filter layered on top of the score.
     [DECIDED]: independent of applying — never gated behind "I applied."
     [DECIDED]: dedup happens here, keyed on company alone — see

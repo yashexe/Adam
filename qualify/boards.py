@@ -3,10 +3,9 @@ Job descriptions, fetched from the public board APIs.
 
 `seen_jobs` stores only what the tracker derived from a posting
 (funding_hint, comp_summary) — never the description itself. Without the
-description the scorer loses required_skills_fit, the preferred-skills
-bonus, and most of domain_company_fit — and the semantic judge has nothing
-to read: every signal that actually discriminates between two NY
-engineering postings. So the text has to be re-fetched.
+description the judge has nothing to read (and the judge's reading is the
+score), and the years/citizenship eligibility rules have nothing to
+extract from. So the text has to be re-fetched.
 
 Both platform modules in the tracker already pull it (ashby_api.py asks for
 descriptions to derive funding_hint; greenhouse_api.py passes content=true),
@@ -112,7 +111,7 @@ def _ashby_job_data(posting: dict, row: dict) -> dict:
         ) or None,
         "description_text": posting.get("descriptionPlain")
         or _strip_html(posting.get("descriptionHtml") or ""),
-        "salary_max": None,  # PREFERENCES.min_salary is None; nothing reads this
+        "salary_max": None,  # nothing reads this since the composite died
     }
 
 

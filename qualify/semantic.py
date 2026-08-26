@@ -1,34 +1,34 @@
 """
-Semantic fit — the 30-weight dimension, supplied by an LLM judgment.
+The judge — the fit score, supplied by an LLM judgement.
 
-Instaply computed this with a local `sentence-transformers` model. That was
-rejected here: it drags torch in as a dependency for one number, and the
-execution model already has a model in the loop for stages 3 and 5. What
-this dimension actually needs is a judgement about whether a posting is the
-kind of job this person should be contacted about, and that is a reading
-task, not a distance calculation.
+Until 2026-08-26 this module fed one dimension (weight 30) of a 100-point
+composite inherited from Instaply, mapping the judge's 0-100 onto a cosine
+similarity band the deterministic scorer expected. Measurement killed that
+architecture (docs/qualify.md, "The judge becomes the score"): on a
+305-posting corpus every deviation the deterministic 70 points produced
+against the judge was an error in the same direction, real interview
+outcomes ordered 7-for-7 on the judge alone, and a re-judged stability
+sample held a +0.97 test-retest correlation. The composite was a lossy
+copy of the judge, so the copy was deleted and the judge's 0-100 IS the
+QUALIFY score. Eligibility stays deterministic (facts, not fit);
+extraction stays for eligibility inputs and display metadata.
 
-Measured on 58 live postings, leaving it unscored made the gate rank an
-intern requisition first and a frontend design-systems role second. See
-docs/qualify.md, "Measured behavior".
+Each judgement carries a small rubric besides the score — shape /
+seniority / domain plus a one-line reason — so the ranking and review
+surfaces can show *why* without re-reading the posting.
 
-## Why the score is mapped rather than passed through
+## Anchors
 
-`scorer._score_semantic_fit` expects a cosine similarity and rescales it
-between SEMANTIC_SIM_FLOOR (0.25) and SEMANTIC_SIM_CEIL (0.55), a band
-calibrated against all-MiniLM-L6-v2 on Instaply's corpus. Feeding a 0-1
-judgement straight in would put almost everything at the ceiling.
-
-So the judge returns a plain 0-100 relevance score and `to_similarity`
-maps it onto that band, which makes `_score_semantic_fit` compute
-`ratio = llm_score / 100` exactly. The scorer stays a verbatim port with no
-change at all, and the calibration lives here where it is visible.
+Every batch carries three frozen calibration postings (`anchors.py`),
+scored blind alongside the live ones. `save_scores` checks them against
+their expected bands and warns on a miss instead of caching them —
+drift detection for a score that now carries everything.
 
 ## Batching
 
-One call scores the whole day. Sixty separate calls would cost sixty times
-the overhead to answer the same question, and judging postings side by side
-produces more consistent scores than judging them in isolation.
+One call scores the whole day. Sixty separate calls would cost sixty
+times the overhead to answer the same question, and judging postings side
+by side produces more consistent scores than judging them in isolation.
 """
 
 from __future__ import annotations
@@ -36,21 +36,22 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from qualify.scorer import SEMANTIC_SIM_CEIL, SEMANTIC_SIM_FLOOR
+from qualify.anchors import ANCHOR_PLATFORM, ANCHORS
 
 CACHE_PATH = Path(__file__).resolve().parent.parent / ".cache" / "semantic.json"
 
-# Enough of the posting to judge relevance without paying for the whole
-# thing. The opening of a description is nearly always the "about the role"
-# section; requirements further down are already covered by the
-# deterministic skills dimensions.
-DESCRIPTION_CHARS = 800
+# How much of the posting the judge reads. 800 until 2026-08-26 — enough
+# for "about the role" but blind to requirements sections further down,
+# which mattered little while deterministic dimensions covered skills and
+# matters a lot now that the judge is the whole score.
+DESCRIPTION_CHARS = 3000
 
-
-def to_similarity(llm_score: int | float) -> float:
-    """Map a 0-100 relevance judgement onto the scorer's similarity band."""
-    ratio = max(0.0, min(100.0, float(llm_score))) / 100.0
-    return SEMANTIC_SIM_FLOOR + ratio * (SEMANTIC_SIM_CEIL - SEMANTIC_SIM_FLOOR)
+# Rubric vocabularies. Stored as given (display, not control flow), listed
+# here so the judge prompt and any consumer agree on the words.
+SHAPES = ("core-engineering", "forward-deployed", "customer-facing",
+          "research", "management", "non-engineering")
+SENIORITY = ("fits", "stretch", "above")
+DOMAIN = ("strong", "some", "none")
 
 
 def _key(platform: str, job_id: str) -> str:
@@ -66,29 +67,46 @@ def load_cache() -> dict:
     return {}
 
 
-def save_scores(scores: list[dict]) -> int:
-    """Persist judged postings. Each entry: {platform, job_id, score, reason}."""
+def save_scores(scores: list[dict]) -> tuple[int, list[str]]:
+    """Persist judged postings; validate and drop anchors.
+
+    Each entry: {platform, job_id, score, shape, seniority, domain, reason}.
+    Returns (total cached, anchor warnings). An anchor scoring outside its
+    expected band is a warning the caller must surface, not an error — the
+    live judgements are still saved, but a human should know the judge has
+    moved before trusting the batch.
+    """
+    warnings: list[str] = []
+    expected = {a["name"]: a["expect"] for a in ANCHORS}
     cache = load_cache()
     for entry in scores:
         platform, job_id = entry.get("platform"), str(entry.get("job_id", ""))
         if not platform or not job_id or entry.get("score") is None:
             continue
+        if platform == ANCHOR_PLATFORM:
+            lo, hi = expected.get(job_id, (0, 100))
+            score = int(entry["score"])
+            if not lo <= score <= hi:
+                warnings.append(
+                    f"anchor {job_id} scored {score}, expected {lo}-{hi} — "
+                    f"the judge has drifted; treat this batch's scores "
+                    f"with suspicion"
+                )
+            continue
         cache[_key(platform, job_id)] = {
             "score": int(entry["score"]),
+            "shape": entry.get("shape"),
+            "seniority": entry.get("seniority"),
+            "domain": entry.get("domain"),
             "reason": entry.get("reason", ""),
         }
     CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
     CACHE_PATH.write_text(json.dumps(cache, indent=2))
-    return len(cache)
-
-
-def cached_similarity(platform: str, job_id: str) -> float | None:
-    """Similarity for `score_job`, or None if this posting is unjudged."""
-    entry = load_cache().get(_key(platform, str(job_id)))
-    return to_similarity(entry["score"]) if entry else None
+    return len(cache), warnings
 
 
 def cached_score(platform: str, job_id: str) -> dict | None:
+    """The full cached judgement for one posting, or None if unjudged."""
     return load_cache().get(_key(platform, str(job_id)))
 
 
@@ -100,10 +118,22 @@ def unjudged(postings: list[dict]) -> list[dict]:
     ]
 
 
-def build_batch(postings: list[dict]) -> str:
-    """The block of postings handed to the judge."""
+def build_batch(postings: list[dict], *, include_anchors: bool = True) -> str:
+    """The block of postings handed to the judge, anchors mixed in.
+
+    Anchors ride unlabelled — the judge cannot tell them from live
+    postings, which is the point.
+    """
+    rows = list(postings)
+    if include_anchors:
+        rows = rows + [
+            {"platform": ANCHOR_PLATFORM, "job_id": a["name"],
+             "company_slug": a["company_slug"], "job_title": a["job_title"],
+             "department": None, "description_text": a["description_text"]}
+            for a in ANCHORS
+        ]
     blocks = []
-    for i, p in enumerate(postings, 1):
+    for i, p in enumerate(rows, 1):
         description = (p.get("description_text") or "")[:DESCRIPTION_CHARS].strip()
         blocks.append(
             f"### {i}. platform={p['platform']} job_id={p['job_id']}\n"

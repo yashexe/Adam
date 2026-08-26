@@ -215,3 +215,33 @@ than sender-based, so a recruiter forwarding to a hiring manager who then
 replies still counts. Bounces are classified separately, since a bounce is
 not silence — it is evidence the address was wrong, which is the one
 failure `outreach/verify.py` cannot currently catch.
+
+---
+
+**The judge's 0-100 is the QUALIFY score — the deterministic composite is
+deleted, not down-weighted.** *(2026-08-26)*
+*Why:* measured, not argued. On a 305-posting corpus every deviation the
+Instaply-inherited 70 deterministic points produced against the judge was
+an error in the same direction — 20 postings promoted above the spend bar
+that the judge rated below 60 (Staff-title substring inflation,
+generic-keyword matches), one borderline demotion, zero cases of the
+deterministic layer catching a judge mistake. The seven real interview
+processes ordered 7-for-7 on the judge alone, and a re-judged 40-posting
+stability sample held +0.97 test-retest correlation. The composite was a
+lossy copy of its own largest input: every tuning pass amounted to making
+the deterministic layer agree harder with the judge, and the endpoint of
+that process is the judge.
+*Alternatives:* keep tuning the composite (rejected — the 2026-08-26
+rebalance was the third fix in three days, each patching a failure mode
+the judge did not have); LLM extraction feeding the deterministic scorer
+(rejected — keeps the machinery whose value could not be demonstrated);
+down-weight instead of delete (rejected — a dimension that only ever
+subtracts has no correct weight but zero).
+*Consequence:* deterministic code keeps the jobs it is right for — hard
+eligibility facts, extraction for eligibility inputs and display, dedup —
+and the fit judgement rests on one LLM call, batched and cached. The new
+single point of failure is mitigated three ways: frozen anchor postings
+ride in every batch and `judge-save` warns when they land outside their
+known bands; the judge reads 3000 chars instead of 800; and the human
+review gate before any spend is unchanged. Tier cutoffs live on the
+judge's own scale, re-derived from ground truth.
