@@ -43,6 +43,7 @@ Full depth: `PIPELINE.md`. Subsystem contracts: `docs/agents.md` (Agent 1/2),
 `docs/qualify.md` (the QUALIFY gate). Where every harvested piece of code
 came from: `harvest/NOTES.md`. Why each fork was resolved the way it was:
 `docs/decisions.md`. What's actually built vs. designed: `docs/status.md`.
+What's next, and why: `docs/roadmap.md`.
 
 ## Non-negotiable invariants
 
