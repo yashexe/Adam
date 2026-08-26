@@ -245,3 +245,23 @@ ride in every batch and `judge-save` warns when they land outside their
 known bands; the judge reads 3000 chars instead of 800; and the human
 review gate before any spend is unchanged. Tier cutoffs live on the
 judge's own scale, re-derived from ground truth.
+
+---
+
+**The QUALIFY score is the judge's 0-100 — an LLM-extraction composite was
+tested and declined, not just argued away.** *(2026-08-26)*
+*Why:* after the regex composite was deleted as a lossy copy of the judge,
+the strongest remaining alternative was an LLM extractor feeding a
+deterministic scorer (LLM reads, code judges — auditable,
+profile-independent). Tested on a frozen 75-posting benchmark: it beat the
+old regex composite decisively (17/20 vs 12/20 unambiguous non-fits
+excluded) but lost to the judge on both sides of the bar (judge 20/20 and
+35/35), at ~3x the tokens per posting. Its residual failures need
+knowledge, not facts — an OutSystems seat extracts as "engineering-ic"
+and only judgment knows it isn't his job.
+*Alternatives:* pure judge (chosen); regex composite (deleted same day);
+extraction composite (declined on this measurement); judge/composite
+blends (swept — no weight where the composite demonstrably helps).
+*Consequence:* the judge's rubric fields (shape/seniority/domain/reason)
+carry the audit trail extraction promised. Numbers and method:
+`docs/qualify.md`, "The LLM-extraction composite, tested and declined".

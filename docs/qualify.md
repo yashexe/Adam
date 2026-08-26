@@ -592,6 +592,61 @@ for the simplification: three days of composite-tuning machinery,
 deleted; what was bought: the score the ground truth actually validates,
 with its failure modes fenced instead of diluted.
 
+## The LLM-extraction composite, tested and declined (2026-08-26)
+
+The judge-becomes-the-score decision left one real alternative untested:
+maybe the old composite failed not because composites are wrong but
+because its *inputs* were regex garbage. An LLM extractor pulling clean
+structured facts (discipline, work style, stated skills, seniority
+expectation, domain) feeding a deterministic scorer would keep the score
+auditable and profile-independent — the inverse split: LLM reads, code
+judges. Yash asked for it to be tested rather than argued about.
+
+Run on a 75-posting sample from the judged corpus: all 20 known-bad
+postings (unambiguous non-fits — sales, research, Staff+, management —
+that the old composite had promoted), all 35 judge-strong postings
+(including the two the old composite suppressed), plus mid/low bands. The
+extractor was profile-blind (knew nothing about any candidate); the
+deterministic scorer over its output was written and frozen *before* any
+extraction ran, so it could not be overfit to the sample.
+
+| | known-bad kept out | known-good kept in |
+|---|---:|---:|
+| judge (current) | 20/20 | 35/35 |
+| old regex composite | 12/20 | 34/35 |
+| LLM-extraction composite | 17/20 | 29/35 |
+
+Two findings, in tension:
+
+- **The hypothesis was half right.** Swapping regex extraction for LLM
+  extraction fixed most of the old composite's disease: the Staff cluster
+  died cleanly (`seniority_expectation: staff-plus`), the
+  solutions/delivery/relationship roles died cleanly
+  (`customer-relationship`), and the extractions themselves were accurate
+  on inspection — no hallucinated facts, defensible enum calls.
+- **It still loses to the judge on both sides of the bar, structurally.**
+  Its three false positives (an OutSystems low-code developer at 77, a
+  campus research program at 77, a bank model-validation "AI Scientist"
+  at 68) are all cases where the extracted facts are *correct* but the
+  verdict needs knowledge the facts can't carry — what OutSystems work
+  means for a Python-backend person, what a campus program is. And its
+  six lost judge-strong postings reproduce the old composite's other
+  disease in softer form: stated-stack overlap penalizing strong-fit
+  roles whose listed technologies differ from his (company-ad's backend role
+  at 58 for matching 1 of 4 listed languages, company-ae at 57 again).
+  Facts-then-formula fails exactly where judgment is the load-bearing
+  step.
+
+Cost sealed it: extraction ran ~3.2k tokens/posting vs the judge's ~1.1k,
+because structured output per posting is bigger than a score plus one
+line. Three times the price for a worse answer, and the judge's rubric
+fields (shape/seniority/domain/reason) already carry the audit trail that
+was extraction's main selling point — the current design is effectively
+extraction and judgment in one call. The one advantage extraction keeps —
+cached facts survive profile changes, cached judgements don't — was not
+worth 3 false positives and 6 lost strong postings. Experiment artifacts
+in the session scratchpad; not merged.
+
 ## What's explicitly not considered
 
 Anything not in the dimension table above — this gate does not currently
