@@ -61,6 +61,26 @@ also what actually makes the execution-model change above worth doing:
 without it, a scheduled trigger just moves the fetch-and-score latency onto
 a timer instead of removing it.
 
+## Give Agent 1 a head start instead of researching blind
+
+Agent 1 runs 50–80k tokens and 15–30 tool calls per company — the most
+expensive step in the pipeline by a wide margin (Agent 2 runs ~20k tokens
+and one `Read` call). On 2026-08-25, 2 of 3 companies run through the live
+skill (company-h, company-i) had real research spent on them and then failed at
+the deterministic verify step anyway — a name conflict and an invalid
+address pattern, respectively. That's expensive research thrown away by
+information the pipeline already had access to, just not until afterward.
+
+Hunter's domain-search endpoint (already called during verification) hands
+back every real address on file at a domain along with the name attached
+to each one. Nothing stops handing Agent 1 that roster *before* it starts
+researching, as a hint rather than an answer — it still does the judgment
+of who the right target is, and `verify` still independently confirms
+deliverability, so the strict separation between the two stays intact.
+What changes is Agent 1 gets to research toward a person already confirmed
+to have a real inbox, instead of finding out after the fact that its pick
+doesn't.
+
 ## Not on this list
 
 Paraform integration, a sector filter on top of QUALIFY, and reviving
