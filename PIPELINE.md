@@ -77,9 +77,10 @@ to decide on its own.
     binds (outreach/verify.py). Produces a confidence label, cached per
     address. Agent 2 gets only the label and the address — never raw
     lookup data it doesn't need, with one deliberate window: Agent 1's
-    `personalization_context`, public company facts for the draft's
-    "something about them" line, which carries what the company said, not
-    how the contact was found. Mirrors a pattern real production agent
+    `personalization_context`, a digest of public company facts the draft
+    builds its bridge and its "something about them" line from (widened
+    from one fact to a digest 2026-08-28, see docs/decisions.md), which
+    carries what the company said, not how the contact was found. Mirrors a pattern real production agent
     systems use: restrict what reaches the LLM's context, don't just gate
     its output.
 

@@ -136,7 +136,8 @@ Invoke the `drafter` subagent. Its contract is in
 
 **Give it only what it needs:** the chosen contact's name and role, the
 posting text and metadata, Agent 1's `personalization_context` if it
-returned one (verbatim — the drafter decides whether it fits), and
+returned one (the whole digest, verbatim — the drafter chooses which
+facts earn a sentence and drops the rest), and
 **today's day of the week** (`date "+%A"`). It has no tools and cannot
 look the date up, and it needs it to ask for a call in a week that
 actually exists — "this week" written on a Friday is one day's notice.

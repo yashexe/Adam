@@ -134,10 +134,13 @@ the research was already burned (company-h and company-i, 2026-08-25). The slate
 turns both failures into a ten-second human choice among alternatives
 that are already on screen.
 
-Two additions ride along. `personalization_context` carries one or two
-public professional facts (funding, launch, blog post) to the drafter —
-the one deliberate window in the research/draft wall, carrying what the
-company said publicly, never how the contact was found. And the ladder
+Two additions ride along. `personalization_context` carries public
+company facts (funding, launch, blog post, what they build and for whom)
+to the drafter — the one deliberate window in the research/draft wall,
+carrying what the company said publicly, never how the contact was
+found. Originally one or two facts; widened 2026-08-28 to a four-to-
+eight-bullet digest after the drafts converged on a template (see "Agent
+2 — the template collapse" below). And the ladder
 gained a clarification, not a reordering: at sub-30-person companies the
 founder/CTO *is* the rung-1 hiring manager, because first recruiter hires
 arrive around 40–50 employees.
@@ -174,6 +177,35 @@ Also reversed: LLM work is no longer suppressed. The résumé-shift rule
 exists to keep AI *coding tooling* off the table, not the production LLM
 classification pipeline he built, which he leads with in his own emails and
 which is a genuine strength.
+
+## Agent 2 — the template collapse (2026-08-28)
+
+The voice rewrite fixed how the drafts sounded; a second failure took
+longer to see because every draft passed every rule. Yash deleted the two
+pending drafts (company-j, company-k) as "the drafts themselves suck," and
+reading them beside the sent company-b email showed why: three emails, one
+skeleton. Identical congrats-on-funding opener, identical identity
+sentence, near-identical closer, and 8 of 9 stored subjects following
+"<role> / founding engineer background". Individually compliant,
+collectively a mail merge.
+
+Both causes were structural, not stylistic. The drafter wrote from the
+posting plus a single `personalization_context` fact — Agent 1's 50–80k
+tokens of company research were otherwise discarded — so the material a
+company-specific email is made of never reached the writer. And the
+prompt had accumulated ~530 lines of bans around one worked example, so
+the model collapsed onto paraphrasing the example, the same
+transcription failure the pre-written "In an email" lines caused in
+PROFILE.md. Bans prevent badness; they cannot produce specificity.
+
+The redesign (full entry in `docs/decisions.md`): the digest above, a
+rewrite of `drafter.md` around finding the **bridge** (the one sentence
+naming the true overlap between the company's problem and his work)
+before writing, two real sent emails as register anchors with the single
+model template removed, an explicit anti-template rule ("if a sentence
+would survive pasted into an email to a different company, rewrite it"),
+density rules delegated to `outreach/draft_lint.py`, and the drafter
+moved from Sonnet to Opus.
 
 ## Agent 2 — Drafter
 

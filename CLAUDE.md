@@ -233,6 +233,29 @@ matches and correctly closed out a company via the prior-contact check
    resolution and `resolve_address`, with the domain-search cached per
    domain. Full verdicts: `docs/research/contact-strategy-findings.md`.
 
+11. **The drafts converged on a template** [FIXED 2026-08-28] — Yash's
+   verdict on the pipeline's output was "the drafts themselves suck", and
+   reading the three real pipeline emails side by side confirmed it: one
+   email with the slots refilled (identical congrats opener, identity
+   sentence, and closer; 8 of 9 stored subjects the same shape). Two
+   structural causes: the drafter was starved (Agent 1's research was
+   discarded except one `personalization_context` fact) and `drafter.md`
+   had grown into ~530 lines of bans around a single worked example, so
+   the model collapsed onto paraphrasing the example. Fix:
+   `personalization_context` widened to a four-to-eight-bullet company
+   digest (same wall, more material); `drafter.md` rewritten around
+   finding the **bridge** (the one sentence naming the true overlap
+   between their problem and his work) with the single model email
+   removed, an anti-template rule, per-tier sentence budgets, and the
+   mechanical density rules delegated to `outreach/draft_lint.py`; the
+   drafter moved from Sonnet to Opus. The redraft run also caught a live
+   citizenship-eligibility leak ("Must be a U.S. citizen" defeats a
+   plain-"us" substring; `qualify/extractor.py` now normalizes the
+   abbreviation) and a stale claim (company-j's "deleted" draft had in fact
+   been hand-sent; the prior-contact check refused the re-draft and the
+   send is now recorded). Full derivation: `docs/decisions.md` and
+   `docs/agents.md`, "Agent 2 — the template collapse".
+
 The profile no longer blocks anything — it is hand-written in
 `qualify/profile.py` from the current resume, and Instaply's `parser.py` was
 not revived.

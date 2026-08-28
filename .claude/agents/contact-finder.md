@@ -140,19 +140,35 @@ note it in `source_notes`.
 
 ## Personalization context
 
-Alongside the slate, report one or two **public, professional** facts that
-would let an email's "something about them" line be specific instead of
-generic: a recent funding round, a product launch, an engineering blog
-post, a conference talk, something the team shipped. One short sentence,
-or null when nothing solid surfaced — null is better than a stretch.
+Alongside the slate, report a **research digest**: four to eight short
+bullets of public facts about the company that would let the email be
+written *to this company* instead of filled in for it. You spend real
+research effort learning what the company does; until 2026-08-28 all of
+it was discarded except one fact, and the drafts converged on a template
+because the writer had nothing specific to work with. Hand the digest
+over; the drafter chooses which one or two facts earn a sentence.
 
-Two boundaries. **Professional sources only**: nothing from personal
-social accounts, nothing about anyone's life outside their role at this
-company; the scope limits above apply here with full force. And this field
-is the **one part of your research that reaches the drafting agent** — it
-will shape a sentence in the email, so it must be something the company or
-person said publicly and would expect a candidate to have seen. Your
-`source_notes` and confidence ratings still never reach the drafter.
+What belongs in it, each bullet one fact, in plain words:
+
+- What the company builds and for whom, as *they* describe it.
+- The specific problem domain — what is messy, manual, regulated, or
+  hard about the work their product does.
+- A recent funding round, launch, engineering blog post, conference
+  talk, or something the team shipped.
+- What the posting itself emphasizes about the team or the work, when
+  that adds something the title does not.
+- Anything concrete a candidate who did their homework would know.
+
+Fewer well-sourced bullets beat eight stretches; null when nothing solid
+surfaced. Two boundaries, unchanged. **Professional sources only**:
+company-owned pages, press, public talks — nothing from personal social
+accounts, nothing about anyone's life outside their role at this company;
+the scope limits above apply here with full force. And this field is the
+**one part of your research that reaches the drafting agent** — every
+bullet must be something the company said publicly and would expect a
+candidate to have seen: what the company said, never how the contact was
+found. Your `source_notes`, per-candidate evidence, and confidence
+ratings still never reach the drafter.
 
 ## Output
 
@@ -172,7 +188,7 @@ Return **only** a JSON object in this shape, in a fenced block:
   ],
   "observed_address": "<any real address seen at that domain, or null>",
   "observed_address_source": "<where you saw it, or null>",
-  "personalization_context": "<one or two public professional facts, or null>",
+  "personalization_context": ["<one public company fact per bullet, four to eight>"] or null,
   "source_notes": "<2-4 sentences: which sources, what was verified vs. inferred, what stayed uncertain>"
 }
 ```

@@ -101,8 +101,12 @@ def heuristic_extract_requirements(job_text: str) -> dict:
     # not disqualifying (he may be TN-eligible, and plenty of companies say
     # it without meaning to rule out TN) -- only an explicit citizenship
     # requirement is. See qualify/eligibility.py's check_citizenship_required.
+    # Postings write the nationality as "US", "U.S.", or "U.S" -- normalize
+    # before matching (a company-e FDE posting's "Must be a U.S. citizen"
+    # slipped past the plain "us" spelling on 2026-08-28).
+    citizenship_text = re.sub(r"\bu\.s\.?(?=\s)", "us", text)
     if any(
-        phrase in text
+        phrase in citizenship_text
         for phrase in ("citizenship required", "must be a us citizen", "us citizens only")
     ):
         result["citizenship_required"] = True

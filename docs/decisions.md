@@ -346,3 +346,41 @@ choice, and drafts never lead with it); no LinkedIn automation ever
 touches this pipeline — the one legitimate consumption is Yash glancing
 at a posting's hiring-team card in his own logged-in browser during
 review.
+
+---
+
+**The drafter writes from a research digest toward a bridge — not from
+one fact toward a template.** *(2026-08-28)*
+*Why:* Yash deleted both pending drafts (company-j, company-k) with "the
+drafts themselves suck," and reading them beside the sent company-b email
+confirmed it: three individually rule-compliant emails that were one
+email with the slots refilled — identical congrats-on-funding opener,
+identical identity sentence, identical closer, and 8 of 9 stored
+subjects following "<role> / founding engineer background". Two causes,
+both structural. Agent 1 spent 50–80k tokens learning what each company
+does and threw all of it away except one `personalization_context`
+fact, so the drafter never had the material a company-specific email is
+made of. And `drafter.md` had grown to ~530 lines of accumulated bans
+around a single worked example, so the model collapsed onto the one
+known-safe path: paraphrase the example — the same transcription
+failure PROFILE.md's "In an email" lines caused before they were
+removed. The bans killed the density problem and specificity died with
+it; the company-b email, the one that broke the density rules, was
+ironically the only one doing real company-specific work.
+*Alternatives:* more bans (rejected — bans can prevent badness, they
+cannot produce specificity); loosening the research/draft wall so the
+drafter sees Agent 1's source notes (rejected — the wall's reason
+stands; what the drafter lacked was company facts, which the sanctioned
+window already carries — the change is volume, not boundary).
+*Consequence:* `personalization_context` widened from one or two facts
+to a four-to-eight-bullet public-company-facts digest (same boundary:
+what the company said, never how the contact was found);
+`.claude/agents/drafter.md` rewritten around the positive objective —
+find the bridge, the one sentence naming the true overlap between their
+problem and his work, before writing anything — with two real sent
+emails as register anchors, the single model-email template removed,
+an explicit anti-template section, and the mechanical density rules
+delegated to `draft_lint.py`, which already enforces them; the drafter
+moved from Sonnet to Opus, free on the subscription. Prompt history
+("this section used to say...") moved out of the live prompt into this
+log and `docs/agents.md`.
