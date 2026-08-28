@@ -9,10 +9,10 @@ already sitting in `harvest/`.
 
 | | |
 |---|---|
-| **Purpose** | Find the name and likely email of the right person to contact at a company that just cleared the QUALIFY gate |
+| **Purpose** | Find the people worth contacting at a company that just cleared the QUALIFY gate — a ranked slate of up to three, for a human to pick from |
 | **Trigger** | A qualifying match, after QUALIFY, before verify (stage 3) |
 | **Input** | Company name/slug, job posting context (title, department, funding_hint, location) |
-| **Output** | `{ name, role, likely_email_pattern, confidence, source_notes }` |
+| **Output** | `{ company, domain, candidates: [{name, role, confidence, evidence}], observed_address, observed_address_source, personalization_context, source_notes }` — ranked, empty `candidates` = skip the company |
 | **Tools** | Web search / page fetch (company team/about page, funding announcements, GitHub, public search results) |
 | **State** | Stateless — one call, one company, no memory between runs |
 | **Allowed actions** | Read-only research only. Never writes persuasive copy, never judges whether the *role* is a good fit (QUALIFY already decided that) |
@@ -114,6 +114,34 @@ metered Sonnet key would run roughly $0.20–0.30 per company. Either way it
 confirms the dedup design in `docs/decisions.md`: this is far too expensive
 to re-run per posting rather than per company.
 
+## Agent 1 — the slate (2026-08-26)
+
+The single-pick contract above was revised after the contact-strategy
+research pass (`docs/research/contact-strategy-findings.md`): Agent 1 now
+returns a **ranked slate of up to three candidates**, each with its own
+evidence and confidence, and the human picks at review time with
+reachability already resolved (`outreach_run.py verify-slate` — one cached
+Hunter domain-search per company, verification credits spent only until
+the first deliverable candidate).
+
+Why: the agent's *finding* was never the weak point (5/5 real people in
+the spike, and the verification pass established that no public
+substrate — ATS APIs, logged-out LinkedIn, data vendors — could replace
+agentic research for sub-50-person companies). The weak point was the
+invisible *commitment*: a wrong ladder call surfaced only after the
+drafting spend, as a discard, and a dead mailbox surfaced only after all
+the research was already burned (company-h and company-i, 2026-08-25). The slate
+turns both failures into a ten-second human choice among alternatives
+that are already on screen.
+
+Two additions ride along. `personalization_context` carries one or two
+public professional facts (funding, launch, blog post) to the drafter —
+the one deliberate window in the research/draft wall, carrying what the
+company said publicly, never how the contact was found. And the ladder
+gained a clarification, not a reordering: at sub-30-person companies the
+founder/CTO *is* the rung-1 hiring manager, because first recruiter hires
+arrive around 40–50 employees.
+
 ## Agent 2 — the voice rewrite (2026-08-23)
 
 The first drafts were competent and did not sound like Yash. The rewrite is
@@ -151,10 +179,10 @@ which is a genuine strength.
 
 | | |
 |---|---|
-| **Purpose** | Write the actual outreach email body |
-| **Trigger** | After stage 4 (verify) produces a confidence-scored contact |
-| **Input** | Verified contact `{ name, role, confidence }`, tracker context (funding_hint, department, comp), drafting rules and style guide (harvested from `job_search_automation/README.md`) |
-| **Output** | Email subject + body |
+| **Purpose** | Write the actual outreach email body — or, in bump mode, the one permitted two-sentence follow-up (2026-08-26, see `docs/decisions.md`) |
+| **Trigger** | After the human picks from the verified slate; bump mode after `bumps` confirms 5–15 business days of silence |
+| **Input** | Chosen contact `{ name, role }`, posting text and metadata, the day of the week, and Agent 1's `personalization_context` when present — never its source_notes, evidence, or verification detail. Bump mode: the contact's first name, the role title, and days elapsed (never the original body — the store keeps no bodies, and a bump never restates one) |
+| **Output** | Email subject + body (bump mode: body only, two sentences) |
 | **Tools** | None — pure synthesis from supplied context, no search, no lookups |
 | **State** | Stateless — one call, one match |
 | **Allowed actions** | Draft only. Never sends (stage 7 is deterministic and human-triggered), never re-evaluates whether the contact is real (stage 4 already decided that) |

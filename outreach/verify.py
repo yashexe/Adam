@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -175,13 +176,40 @@ def verify_email(email: str, *, use_cache: bool = True) -> VerificationResult:
     return result
 
 
-def confirm_pattern(domain: str) -> tuple[str | None, str, list[dict]]:
+# A week: long enough that a slate resolution and its finalize share one
+# search credit, short enough that Hunter indexing a small company's domain
+# — exactly the coverage gap this pipeline lives in — shows up on a later
+# attempt instead of being masked by a stale cache forever.
+_DOMAIN_TTL_SECONDS = 7 * 24 * 3600
+
+
+def confirm_pattern(
+    domain: str, *, use_cache: bool = True
+) -> tuple[str | None, str, list[dict]]:
     """Hunter's own view of a domain's address pattern, for corroborating
     what Agent 1 inferred, plus the per-address names behind it. The name
     list is what catches a pattern-derived address that happens to already
-    belong to someone else — see `_name_conflict`. Spends a credit, so this
-    is opt-in: use it when Agent 1's pattern evidence was weak, not on
-    every contact."""
+    belong to someone else — see `_name_conflict`.
+
+    Cached per domain for a week, because with slates (several candidate
+    contacts at one company) the same roster would otherwise be bought once
+    per candidate. Two deliberate exclusions: failed calls (a transient
+    fact, not a finding) and empty results — "Hunter knows nothing about
+    this domain yet" is the answer most likely to have changed by the next
+    attempt, and caching it would make a small company permanently
+    unresolvable. Cached entries keep only the three fields the name
+    checks read; Hunter's per-address metadata (sources, scores) would
+    bloat a cache file that is rewritten whole on every save. Cache keys
+    are `domain:{domain}`, which cannot collide with the verifier's
+    per-address keys (those contain @).
+    """
+    cache = _load_cache()
+    cache_key = f"domain:{domain}"
+    if use_cache and cache_key in cache:
+        entry = cache[cache_key]
+        if time.time() - entry.get("cached_at", 0) < _DOMAIN_TTL_SECONDS:
+            return entry["pattern"], entry["note"] + " (cached)", entry["emails"]
+
     key = _api_key()
     if not key:
         return None, f"no HUNTER_API_KEY in {ENV_PATH}", []
@@ -189,8 +217,22 @@ def confirm_pattern(domain: str) -> tuple[str | None, str, list[dict]]:
     if payload is None:
         return None, error, []
     data = payload.get("data") or {}
-    emails = data.get("emails") or []
-    return data.get("pattern"), f"{len(emails)} addresses seen", emails
+    emails = [
+        {
+            "value": entry.get("value"),
+            "first_name": entry.get("first_name"),
+            "last_name": entry.get("last_name"),
+        }
+        for entry in (data.get("emails") or [])
+    ]
+    pattern, note = data.get("pattern"), f"{len(emails)} addresses seen"
+    if pattern or emails:
+        cache[cache_key] = {
+            "pattern": pattern, "note": note, "emails": emails,
+            "cached_at": time.time(),
+        }
+        _save_cache(cache)
+    return pattern, note, emails
 
 
 def credits_remaining() -> tuple[int | None, str]:
@@ -307,34 +349,90 @@ def _name_conflict(
     return None  # address isn't among Hunter's known contacts at all
 
 
+def _roster_match(emails: list[dict], first: str, last: str) -> str | None:
+    """The address Hunter itself attributes to this person, if it has one.
+
+    The inverse of `_name_conflict`: instead of checking whether a rendered
+    address belongs to someone else, look the person up directly in the
+    domain roster. This is what rescues a contact when the domain has no
+    usable pattern, or when the pattern renders somebody else's mailbox —
+    the roster may still carry the intended person under a different local
+    part.
+
+    **Both last names must be present and equal.** A first-name-only match
+    is how "[the contact]" gets handed [another employee]'s real, verifying mailbox — the exact
+    wrong-person failure `_name_conflict` exists to catch, reintroduced
+    through this rung where that check cannot see it. When either side
+    lacks a surname, no match: the pattern and fallback rungs still run,
+    and a missed rescue costs one skipped candidate where a false one
+    costs an email to a stranger. Role accounts are excluded; a person
+    matched to a shared inbox is a data error, not a contact.
+    """
+    for entry in emails:
+        known_first = (entry.get("first_name") or "").strip().lower()
+        known_last = (entry.get("last_name") or "").strip().lower()
+        if not known_first or known_first != first.lower():
+            continue
+        if not last or not known_last or known_last != last.lower():
+            continue
+        value = (entry.get("value") or "").strip().lower()
+        if value and not is_role_account(value):
+            return value
+    return None
+
+
+def _candidate_addresses(
+    pattern: str | None, emails: list[dict], first: str, last: str, domain: str
+) -> tuple[list[tuple[str, str]], str]:
+    """The ordered (address, source) attempts for one person, plus the
+    reason the pattern rung was blocked when it was.
+
+    This is the resolution ladder — pattern render guarded by the
+    name-conflict check, then the roster lookup — extracted so that the
+    advisory slate (`resolve_slate`) and the binding finalize resolution
+    (`resolve_address`) can never disagree about it. Two parallel copies
+    of the company-c safety logic drifting apart is how the human would
+    end up approving one address while a different one gets drafted to.
+    """
+    attempts: list[tuple[str, str]] = []
+    blocked = ""
+    candidate = _apply_pattern(pattern or "", first, last)
+    if candidate:
+        address = f"{candidate}@{domain}"
+        conflict = _name_conflict(emails, address, first, last)
+        if conflict:
+            blocked = conflict
+        else:
+            attempts.append((address, "pattern"))
+    roster = _roster_match(emails, first, last)
+    if roster and all(roster != address for address, _ in attempts):
+        attempts.append((roster, "roster"))
+    return attempts, blocked
+
+
 def resolve_address(
     first: str, last: str, domain: str, *, fallback: str | None = None
 ) -> tuple[str | None, VerificationResult]:
     """Find this person's address at a domain, using Hunter's domain-wide
     pattern rather than a single observed address.
 
-    Costs up to 3 credits: one domain-search, then a verification of the
-    pattern-derived address, and one more if `fallback` differs and the
-    first came back blocking. Returns (address, verification).
+    Tries, in order: the domain pattern rendered for the name, the roster
+    address Hunter attributes to the person directly, then `fallback`.
+    Costs at most one domain-search (cached per domain) plus one
+    verification per attempted address. Returns (address, verification).
     """
     pattern, note, emails = confirm_pattern(domain)
-    candidate = _apply_pattern(pattern or "", first, last)
+    attempts, blocked = _candidate_addresses(pattern, emails, first, last, domain)
 
-    tried = ""
-    if candidate:
-        address = f"{candidate}@{domain}"
-        conflict = _name_conflict(emails, address, first, last)
-        if conflict:
-            tried = conflict
-        else:
-            result = verify_email(address)
-            if not result.should_block:
-                return address, result
-            # The pattern was fine, the resulting mailbox just is not there.
-            # Reporting this as "no usable pattern" sent me chasing the
-            # wrong bug once; say which of the two actually failed.
-            tried = (f"pattern {pattern} gives {address}, which does not "
-                     f"exist ({result.reason})")
+    # Which rung failed matters: reporting a dead mailbox as "no usable
+    # pattern" sent me chasing the wrong bug once.
+    tried = [blocked] if blocked else []
+    for address, source in attempts:
+        result = verify_email(address)
+        if not result.should_block:
+            return address, result
+        tried.append(f"{source} address {address} does not exist "
+                     f"({result.reason})")
 
     if fallback and is_role_account(fallback):
         return None, VerificationResult(
@@ -357,10 +455,114 @@ def resolve_address(
 
     if tried:
         return None, VerificationResult(
-            email=f"?@{domain}", label=UNVERIFIED, reason=tried
+            email=f"?@{domain}", label=UNVERIFIED, reason="; ".join(tried)
         )
     return None, VerificationResult(
         email=f"?@{domain}",
         label=UNVERIFIED,
         reason=f"no usable pattern for {domain} ({pattern or 'none'}; {note})",
     )
+
+
+# ── Slate resolution ───────────────────────────────────────────────────────
+# Agent 1 returns a ranked slate of candidates rather than one committed
+# pick (docs/research/contact-strategy-findings.md). Before the slate is
+# shown to the human, every candidate gets an address resolved against the
+# domain's single cached roster, but only the first deliverable one costs a
+# verification credit — the point is to know which picks are reachable
+# before drafting, not to spend the month's quota confirming alternates
+# nobody chose. resolve_address() remains the authority for whichever
+# candidate the human actually selects.
+
+DEFERRED = "deferred"  # resolvable, deliberately not verified yet
+
+
+@dataclass
+class SlateResolution:
+    name: str
+    address: str | None
+    source: str  # 'pattern' | 'roster' | ''
+    label: str   # a verification label, or DEFERRED when no credit was spent
+    score: int | None
+    reason: str
+
+
+def resolve_slate(
+    names: list[str], domain: str, *, fallback: str | None = None
+) -> list[SlateResolution]:
+    """Resolve an address for each candidate name at one domain.
+
+    One domain-search (cached) covers the whole slate, and every candidate
+    walks the same `_candidate_addresses` ladder finalize uses, so the
+    preview cannot disagree with the binding resolution. Verification
+    credits are spent only until the first candidate proves deliverable;
+    everyone after that is reported as DEFERRED with the address that
+    would be tried.
+
+    `fallback` is Agent 1's company-level observed address. It is never
+    attributed to a candidate here — showing the same address under three
+    names would be exactly the misattribution this module exists to
+    prevent — but an unresolved candidate's reason notes that finalize
+    can still try it, so the preview does not under-report reachability
+    at the small companies where the fallback is the only route.
+    """
+    pattern, note, emails = confirm_pattern(domain)
+    fallback_note = ""
+    if fallback and not is_role_account(fallback):
+        fallback_note = (f"; finalize can still try the observed address "
+                         f"{fallback} if this candidate is chosen")
+
+    out: list[SlateResolution] = []
+    have_verified = False
+    for name in names:
+        parts = (name or "").split()
+        if not parts:
+            # One malformed agent-emitted candidate must cost one slate
+            # row, never the whole verify-slate call.
+            out.append(SlateResolution(
+                name or "", None, "", UNVERIFIED, None,
+                "candidate has no name",
+            ))
+            continue
+        first, last = parts[0], (parts[-1] if len(parts) > 1 else "")
+
+        attempts, blocked = _candidate_addresses(
+            pattern, emails, first, last, domain
+        )
+        if not attempts:
+            out.append(SlateResolution(
+                name, None, "", UNVERIFIED, None,
+                (blocked or f"no pattern or roster entry at {domain} "
+                            f"({pattern or 'no pattern'}; {note})")
+                + fallback_note,
+            ))
+            continue
+
+        if have_verified:
+            address, source = attempts[0]
+            out.append(SlateResolution(
+                name, address, source, DEFERRED, None,
+                "not verified yet; finalize verifies it if chosen",
+            ))
+            continue
+
+        last_failure: tuple[str, str, VerificationResult] | None = None
+        for address, source in attempts:
+            result = verify_email(address)
+            if not result.should_block:
+                have_verified = True
+                out.append(SlateResolution(
+                    name, address, source, result.label, result.score,
+                    result.reason,
+                ))
+                break
+            last_failure = (address, source, result)
+        else:
+            # attempts was non-empty (guarded above), so last_failure is set.
+            address, source, result = last_failure
+            out.append(SlateResolution(
+                name, None, source, result.label, result.score,
+                f"{address} does not exist ({result.reason})" + fallback_note,
+            ))
+
+    return out

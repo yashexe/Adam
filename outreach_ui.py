@@ -142,7 +142,16 @@ def action_mark_sent(company: str) -> dict:
             f"(state: {found}). Not recording a send that cannot be confirmed."
         )
 
-    store.mark_sent(company_slug=company, contact_email=row["contact_email"])
+    # Record Gmail's Date header as sent_at, not this row's creation time:
+    # reconciliation runs after the fact by definition, sometimes weeks
+    # after (company-a), and the follow-up window math reads sent_at.
+    from outreach.replies import _as_iso
+
+    store.mark_sent(
+        company_slug=company,
+        contact_email=row["contact_email"],
+        sent_at=_as_iso(seen.sent_date),
+    )
     invalidate()
     return {"company": company, "status": "sent", "sent_date": seen.sent_date}
 
@@ -429,6 +438,26 @@ const VERIFY = {
   invalid:    ["undeliverable", "Confirmed undeliverable. This should never have been drafted."],
 };
 
+// Agent 1 returns a ranked slate, not a single pick; the chosen contact is
+// on the card, and the alternates it was chosen over belong next to it —
+// reviewing the selection is the point of storing them.
+function slateNote(c) {
+  if (!c.contact_slate) return "";
+  let slate;
+  try { slate = JSON.parse(c.contact_slate); } catch { return ""; }
+  if (!Array.isArray(slate) || !slate.length) return "";
+  const rows = slate.map(s => {
+    const chosen = s.name === c.contact_name ? "→ " : "&nbsp;&nbsp;&nbsp;";
+    const addr = s.address ? ` · <span class="mail">${esc(s.address)}</span>` : "";
+    // An unverified-by-choice candidate arrives with an empty label
+    // (resolve_candidate_slate maps DEFERRED to ""), so falsy means
+    // "no verdict to show", not "unknown verdict".
+    const label = s.verify_label ? ` · ${esc(s.verify_label)}` : "";
+    return `${chosen}<b>${esc(s.name)}</b> <span class="muted">${esc(s.role || "")}</span>${addr}${label}`;
+  }).join("<br>");
+  return `<div class="note small">Slate considered:<br>${rows}</div>`;
+}
+
 function card(c) {
   const g = c.gmail || {state: "unknown"};
   const canEdit = g.state === "draft";
@@ -454,6 +483,7 @@ function card(c) {
     </div>
     ${vWhy ? `<div class="note small">${esc(vWhy)}</div>` : ""}
     ${c.source_notes ? `<div class="note small">Why this contact: ${esc(c.source_notes)}</div>` : ""}
+    ${slateNote(c)}
     <div class="note">${esc(EXPLAIN[g.state])}${
       g.sent_date ? " <br>Sent " + esc(g.sent_date) + "." : ""
     }</div>
@@ -495,8 +525,9 @@ function render(s) {
     : `<p class="empty">None.</p>`;
   const replyChip = d => {
     if (d.replied_at) return `<span class="vchip verified">replied</span>`;
-    if (!d.reply_checked_at) return `<span class="vchip">unchecked</span>`;
-    return `<span class="vchip catch_all">no reply yet</span>`;
+    const bump = d.follow_up_at ? `<span class="vchip">bumped</span>` : "";
+    if (!d.reply_checked_at) return bump + `<span class="vchip">unchecked</span>`;
+    return bump + `<span class="vchip catch_all">no reply yet</span>`;
   };
   const contacted = s.contacted.length
     ? s.contacted.map(d => `<div class="listrow">

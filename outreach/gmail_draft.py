@@ -20,9 +20,12 @@ Gmail API would need OAuth and a Cloud project; IMAP APPEND needs neither.
 
 from __future__ import annotations
 
+import email
+import email.utils
 import imaplib
 import os
 import time
+from email.header import decode_header, make_header
 from email.message import EmailMessage
 from email.utils import formataddr
 from pathlib import Path
@@ -42,6 +45,7 @@ RESUME_PATH = (
 
 IMAP_HOST = "imap.gmail.com"
 DRAFTS_MAILBOX = '"[Gmail]/Drafts"'
+SENT_MAILBOX = '"[Gmail]/Sent Mail"'
 
 SENDER_NAME = "Yash Bhavsar"
 
@@ -110,6 +114,19 @@ def _build_message(
     return msg
 
 
+def _append_draft(imap: imaplib.IMAP4_SSL, msg: EmailMessage) -> None:
+    """The one way a message enters Drafts. Shared by all three creators so
+    the mailbox, the flag, and the failure behavior cannot drift apart."""
+    status, response = imap.append(
+        DRAFTS_MAILBOX,
+        "\\Draft",
+        imaplib.Time2Internaldate(time.time()),
+        msg.as_bytes(),
+    )
+    if status != "OK":
+        raise RuntimeError(f"IMAP APPEND failed: {status} {response!r}")
+
+
 def create_draft(
     *,
     to: str,
@@ -139,19 +156,93 @@ def create_draft(
     imap = imaplib.IMAP4_SSL(IMAP_HOST)
     try:
         imap.login(user, password)
-        status, response = imap.append(
-            DRAFTS_MAILBOX,
-            "\\Draft",
-            imaplib.Time2Internaldate(time.time()),
-            msg.as_bytes(),
-        )
-        if status != "OK":
-            raise RuntimeError(f"IMAP APPEND failed: {status} {response!r}")
+        _append_draft(imap, msg)
     finally:
         try:
             imap.logout()
         except Exception:
             pass
+
+
+def create_reply_draft(*, to: str, body: str) -> str:
+    """Append a reply draft into the thread of the most recent message sent
+    to `to`. Returns the subject used. Never sends.
+
+    Built for the one permitted follow-up bump (docs/decisions.md): the
+    reply carries In-Reply-To/References from the original so Gmail threads
+    it, and deliberately no résumé — it is already in the thread, and a
+    bump that re-attaches it reads as a re-send rather than a nudge.
+
+    Raises RuntimeError when the Sent folder holds nothing to this address:
+    a bump to a message this account never sent would start a brand-new
+    cold thread, which is exactly what the one-outreach dedup forbids.
+    """
+    user, password = _load_credentials()
+
+    imap = imaplib.IMAP4_SSL(IMAP_HOST)
+    try:
+        imap.login(user, password)
+        imap.select(SENT_MAILBOX, readonly=True)
+        typ, data = imap.uid("SEARCH", None, "TO", to)
+        if typ != "OK" or not data or not data[0]:
+            raise RuntimeError(
+                f"no sent message to {to} found — cannot build a reply draft"
+            )
+
+        # IMAP SEARCH TO is a substring match over the whole header, so a
+        # search for li@acme.com also returns mail to ali@acme.com. Walk
+        # newest to oldest and take the first message actually addressed
+        # to this exact mailbox — threading the bump onto someone else's
+        # conversation is worse than not threading at all.
+        original = None
+        for uid in reversed(data[0].split()):
+            typ, raw = imap.uid(
+                "FETCH", uid, "(BODY.PEEK[HEADER.FIELDS (TO SUBJECT MESSAGE-ID)])"
+            )
+            if typ != "OK" or not raw or not raw[0]:
+                continue
+            headers = email.message_from_bytes(raw[0][1])
+            recipients = {
+                addr.lower()
+                for _, addr in email.utils.getaddresses(headers.get_all("To") or [])
+            }
+            if to.lower() in recipients:
+                original = headers
+                break
+        if original is None:
+            raise RuntimeError(
+                f"no sent message addressed exactly to {to} found — cannot "
+                f"build a reply draft"
+            )
+
+        # The raw header may arrive RFC2047-encoded; prefixing "Re: " onto
+        # the encoded form would render as literal =?UTF-8?...?= garbage.
+        raw_subject = (original["Subject"] or "").strip()
+        original_subject = (
+            str(make_header(decode_header(raw_subject))) if raw_subject else ""
+        )
+        message_id = (original["Message-ID"] or "").strip()
+
+        subject = original_subject
+        if subject and not subject.lower().startswith("re:"):
+            subject = f"Re: {subject}"
+        elif not subject:
+            subject = "Re: my earlier email"
+
+        msg = _build_message(
+            to=to, subject=subject, body=body, sender=user, attach_resume=False
+        )
+        if message_id:
+            msg["In-Reply-To"] = message_id
+            msg["References"] = message_id
+
+        _append_draft(imap, msg)
+    finally:
+        try:
+            imap.logout()
+        except Exception:
+            pass
+    return subject
 
 
 def replace_draft(
@@ -203,14 +294,7 @@ def replace_draft(
                 if old_subject.lower() in header.lower():
                     stale.append(uid)
 
-        status, response = imap.append(
-            DRAFTS_MAILBOX,
-            "\\Draft",
-            imaplib.Time2Internaldate(time.time()),
-            msg.as_bytes(),
-        )
-        if status != "OK":
-            raise RuntimeError(f"IMAP APPEND failed: {status} {response!r}")
+        _append_draft(imap, msg)
 
         for uid in stale:
             typ, _ = imap.uid("COPY", uid, '"[Gmail]/Trash"')

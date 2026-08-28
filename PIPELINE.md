@@ -59,15 +59,29 @@ to decide on its own.
 [3] FIND THE CONTACT — agentic (Agent 1)
     Full contract: docs/agents.md. [DECIDED]: agentic, not a pure API call
     — see docs/decisions.md for the Hunter/Apollo coverage research behind
-    that call.
+    that call, and docs/research/contact-strategy-findings.md for the
+    2026-08-26 verification that no public substrate (ATS APIs, logged-out
+    LinkedIn, data vendors) can replace it for this population.
+    [REVISED 2026-08-26]: returns a ranked slate of up to three candidates
+    with per-candidate evidence, not one committed pick — the selection
+    itself became the human-reviewable decision the old design hid.
 
 [4] VERIFY THE EMAIL — deterministic [DECIDED, implemented]
-    Resolve the candidate address from the domain's own pattern and check
-    it against Hunter.io (outreach/verify.py), live. Produces a confidence
-    label, cached per address. Agent 2 gets only the label and the address
-    — never raw lookup data it doesn't need. Mirrors a pattern real
-    production agent systems use: restrict what reaches the LLM's context,
-    don't just gate its output.
+    Two passes since 2026-08-26. First, `verify-slate` resolves an address
+    for every slate candidate against the domain's own pattern and
+    Hunter's per-address roster (one cached domain-search for the slate,
+    verification credits spent only until the first deliverable
+    candidate), so the human picks with reachability in view instead of
+    finding out after the drafting spend. Then finalize re-resolves and
+    verifies whichever candidate was chosen — the advisory pass never
+    binds (outreach/verify.py). Produces a confidence label, cached per
+    address. Agent 2 gets only the label and the address — never raw
+    lookup data it doesn't need, with one deliberate window: Agent 1's
+    `personalization_context`, public company facts for the draft's
+    "something about them" line, which carries what the company said, not
+    how the contact was found. Mirrors a pattern real production agent
+    systems use: restrict what reaches the LLM's context, don't just gate
+    its output.
 
 [5] DRAFT THE EMAIL — agentic (Agent 2)
     Full contract: docs/agents.md.
@@ -94,10 +108,21 @@ to decide on its own.
     Dedup key is the company alone. See "Rate-limiting policy" below.
 ```
 
-## Rate-limiting policy [DECIDED]
+## Rate-limiting policy [DECIDED; touch count revised 2026-08-26]
 
-At most one outreach attempt per company, full stop, regardless of how many
-separate qualifying postings that company produces afterward.
+One contact per company, at most two touches to that contact, regardless
+of how many separate qualifying postings the company produces afterward.
+The second touch is the one permitted follow-up bump: a two-sentence reply
+in the original Gmail thread, offered only after 5–15 business days of
+*confirmed* silence (`bumps` checks Gmail live first — a reply or a bounce
+disqualifies), drafted by Agent 2 in bump mode, sent by a human like
+everything else, and recorded in `outreach_log.follow_up_at` so the store
+itself refuses a second one. This amends the original "one attempt, full
+stop": the single-send rule was the one part of the policy that measured
+evidence actually contradicted (follow-up lift is the most replicated
+finding in the outreach literature, and candidate follow-ups are expected
+per HR-manager survey data — docs/decisions.md, "One follow-up bump").
+What did not change: one company, one person, one thread, ever.
 
 - A company becomes "claimed" the moment a draft is created for it.
 - A second qualifying posting while the first draft is still pending: the

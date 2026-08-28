@@ -4,7 +4,10 @@ Outreach pipeline CLI — the deterministic half.
 
     python3 outreach_run.py prepare --days 1        # who is worth a contact call
     python3 outreach_run.py prepare --days 1 --json # same, for the skill to consume
+    python3 outreach_run.py verify-slate            # which slate candidates are reachable (JSON stdin)
     python3 outreach_run.py status                  # pending drafts and contacted companies
+    python3 outreach_run.py bumps                   # who is eligible for the one follow-up
+    python3 outreach_run.py bump <company>           # draft that follow-up (body on stdin)
     python3 outreach_run.py discard <company>        # draft got deleted in Gmail, release the claim
 
 Stages 3 and 5 are agent calls and are not driven from here — the
@@ -20,7 +23,16 @@ import json
 import sys
 
 from outreach import store
-from outreach.pipeline import DEFAULT_MIN_SCORE, Candidate, finalize, prepare
+from outreach.pipeline import (
+    DEFAULT_MIN_SCORE,
+    Candidate,
+    bump_candidates,
+    create_bump,
+    finalize,
+    prepare,
+    record_reply_findings,
+    resolve_candidate_slate,
+)
 from qualify.semantic import build_batch, save_scores, unjudged
 
 
@@ -119,14 +131,41 @@ def _judge_candidates(*, days: int, limit: int | None) -> list[dict]:
     return out
 
 
+def cmd_verify_slate(args: argparse.Namespace) -> int:
+    """Read {"domain": ..., "candidates": [{"name", "role", ...}, ...]} on
+    stdin — Agent 1's ranked slate — and print each candidate with the
+    address that would be used and whether it is reachable. One cached
+    domain-search for the whole slate; a verification credit is spent only
+    until the first deliverable candidate. Advisory: finalize re-verifies
+    whichever candidate the human actually picks."""
+    payload = json.load(sys.stdin)
+    candidates = payload.get("candidates") or []
+    if not candidates:
+        print("error: no candidates in payload", file=sys.stderr)
+        return 1
+    domain = payload.get("domain")
+    if not domain:
+        print("error: no domain in payload — Agent 1 could not establish the "
+              "company's email domain, so there is nothing to resolve "
+              "against; skip the company or re-run the contact search",
+              file=sys.stderr)
+        return 1
+    resolved = resolve_candidate_slate(
+        domain, candidates, observed_address=payload.get("observed_address")
+    )
+    print(json.dumps(resolved, indent=2))
+    return 0
+
+
 def cmd_finalize(args: argparse.Namespace) -> int:
-    """Read one JSON payload on stdin: the candidate, the contact Agent 1
-    found, and the draft Agent 2 wrote. Verifies, drafts into Gmail, claims
-    the company. Taking JSON on stdin rather than a wall of flags keeps the
-    skill's invocation readable and avoids shell-quoting a multi-paragraph
-    email body."""
+    """Read one JSON payload on stdin: the candidate, the contact chosen
+    from Agent 1's slate, and the draft Agent 2 wrote. Verifies, drafts
+    into Gmail, claims the company. Taking JSON on stdin rather than a wall
+    of flags keeps the skill's invocation readable and avoids shell-quoting
+    a multi-paragraph email body."""
     payload = json.load(sys.stdin)
     candidate = Candidate(**payload["candidate"])
+    slate = payload.get("contact_slate")
     result = finalize(
         candidate=candidate,
         contact_name=payload["contact_name"],
@@ -136,6 +175,7 @@ def cmd_finalize(args: argparse.Namespace) -> int:
         body=payload["body"],
         observed_address=payload.get("observed_address"),
         source_notes=payload.get("source_notes"),
+        contact_slate=json.dumps(slate) if slate is not None else None,
         ignore_prior_contact=payload.get("ignore_prior_contact", False),
         ignore_lint=payload.get("ignore_lint", False),
     )
@@ -178,15 +218,9 @@ def cmd_replies(args: argparse.Namespace) -> int:
 
     states = reply_check.check(contacted)
     checked_at = reply_check.now_utc()
-    for row in contacted:
-        state = states.get(row["company_slug"])
-        if not state or state.state == reply_check.UNKNOWN:
-            continue  # never record a guess as a finding
-        store.record_reply_check(
-            row["company_slug"],
-            replied_at=state.replied_at if state.state == reply_check.REPLIED else None,
-            checked_at=checked_at,
-        )
+    # Recording (including the never-record-a-guess rule) is shared with
+    # the bump flow so the two write paths cannot drift.
+    record_reply_findings(contacted, states, checked_at)
 
     print(f"\nchecked {len(contacted)} contacted company(s)\n")
     for row in contacted:
@@ -212,6 +246,53 @@ def cmd_replies(args: argparse.Namespace) -> int:
                   f"about which contacts respond. The point is that it is now "
                   f"being recorded.")
     print()
+    return 0
+
+
+def cmd_bumps(args: argparse.Namespace) -> int:
+    """Classify every contacted company for the one permitted follow-up.
+
+    Checks Gmail live for replies first (and records what it finds), so an
+    'eligible' here means confirmed silence, not assumed silence."""
+    rows = bump_candidates()
+    if args.json:
+        print(json.dumps(rows, indent=2))
+        return 0
+    if not rows:
+        print("nothing contacted yet, so nothing to bump")
+        return 0
+    print(f"\n{len(rows)} contacted company(s)\n")
+    for r in rows:
+        print(f"  {r['company_slug']:<18} {r['contact_email']:<30} "
+              f"{r['status']:<10} {r['detail']}")
+        if r.get("contact_name") or r.get("job_title"):
+            who = " — ".join(
+                part for part in (r.get("contact_name"), r.get("job_title")) if part
+            )
+            print(f"  {'':<18} {who}")
+    eligible = [r for r in rows if r["status"] == "eligible"]
+    if eligible:
+        print(f"\n{len(eligible)} eligible for their one follow-up bump — "
+              f"drafting one is a human decision, made per company")
+    print()
+    return 0
+
+
+def cmd_bump(args: argparse.Namespace) -> int:
+    """Create the one permitted follow-up draft for a company. The bump
+    body (Agent 2's, human-reviewed intent) arrives on stdin; the draft
+    lands as a reply in the original Gmail thread, with no résumé attached.
+    The store refuses a second bump and refuses to bump a reply."""
+    body = sys.stdin.read().strip()
+    if not body:
+        print("error: bump body expected on stdin", file=sys.stderr)
+        return 1
+    try:
+        result = create_bump(args.company, body)
+    except (ValueError, store.AlreadyClaimed, RuntimeError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    print(json.dumps(result, indent=2))
     return 0
 
 
@@ -264,8 +345,20 @@ def main() -> int:
     js = sub.add_parser("judge-save", help="persist the judge's JSON array (stdin)")
     js.set_defaults(func=cmd_judge_save)
 
+    vs = sub.add_parser("verify-slate",
+                        help="resolve reachability for Agent 1's slate (JSON on stdin)")
+    vs.set_defaults(func=cmd_verify_slate)
+
     f = sub.add_parser("finalize", help="verify + draft into Gmail + claim (JSON on stdin)")
     f.set_defaults(func=cmd_finalize)
+
+    b = sub.add_parser("bumps", help="classify contacted companies for the one follow-up")
+    b.add_argument("--json", action="store_true")
+    b.set_defaults(func=cmd_bumps)
+
+    bp = sub.add_parser("bump", help="draft the one follow-up for a company (body on stdin)")
+    bp.add_argument("company", help="company_slug to bump")
+    bp.set_defaults(func=cmd_bump)
 
     s = sub.add_parser("status", help="show pending drafts and contacted companies")
     s.set_defaults(func=cmd_status)

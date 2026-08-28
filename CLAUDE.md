@@ -27,12 +27,14 @@ in the loop, which ashby-ny-tracker deliberately has none of.
 [1] Trigger    det.      fresh match from ashby-ny-tracker's poll.py
 [2] Qualify    det.+AGENT  hard eligibility rules + the relevance-judge's
                            score (which IS the score) — docs/qualify.md
-[3] Find contact  AGENT  Agent 1 — docs/agents.md
+[3] Find contact  AGENT  Agent 1, ranked slate of up to 3 — docs/agents.md
+[3.5] Pick     det./human  verify-slate resolves reachability; human picks
 [4] Verify     det.      Hunter.io email verification, live — outreach/verify.py
 [5] Draft      AGENT     Agent 2 — docs/agents.md
 [6] Approve    det./human   the one gate that can't be automated away
 [7] Send       det./human   reused job_search_automation SMTP code
-[8] Log        det.      company-level dedup
+[8] Log        det.      company-level dedup; one follow-up bump per
+                          company, human-sent (outreach_run.py bumps/bump)
 ```
 
 Who Yash is, and every story a draft can draw on: `PROFILE.md` — the single
@@ -49,6 +51,13 @@ What's next, and why: `docs/roadmap.md`.
 ## Non-negotiable invariants
 
 - Dedup is per-company, never per-posting or per-contact.
+- One contact per company, at most two touches: the initial email plus one
+  follow-up bump after 5–15 business days of confirmed silence, in the
+  same thread, human-sent, recorded in `outreach_log.follow_up_at` so the
+  store refuses a second. The bump (added 2026-08-26) is the only
+  evidence-backed amendment the contact-strategy research survived
+  verification with — see `docs/decisions.md`. Never a sequence, never a
+  second thread, never a second person.
 - Nothing sends without live, explicit human/chat approval — no exception,
   regardless of how confident any agent is.
 - Outreach is independent of applying — never gated behind "did I apply."
@@ -76,7 +85,10 @@ What's next, and why: `docs/roadmap.md`.
   someone who already got one — see `outreach/reconcile.py`.
 - Agent 1 never writes persuasive copy; Agent 2 never judges whether a
   contact is real. Strict separation, enforced by the deterministic verify
-  step between them.
+  step between them. One deliberate window since 2026-08-26:
+  `personalization_context`, public company facts Agent 1 hands the draft
+  — what the company said, never how the contact was found. Source notes,
+  evidence, and verification detail still never reach Agent 2.
 - Deterministic code owns anything with lasting real-world consequence;
   agentic work owns only what's tedious-but-cheap-to-retry.
 - ashby-ny-tracker's and Instaply's own ingestion/serving layers are not
@@ -93,7 +105,11 @@ fit score is the batched relevance-judge's 0-100 directly — the
 Instaply-inherited deterministic composite around it was measured to be
 a lossy copy of the judge and deleted (item 9 below); hard eligibility
 stays deterministic, and frozen anchor postings in every judge batch
-catch drift. Numbers in `docs/qualify.md`. Full breakdown:
+catch drift. Numbers in `docs/qualify.md`. Also since 2026-08-26,
+contact selection runs as a human-arbitrated slate with one follow-up
+bump per company (item 10 below), after a commissioned research report
+was adversarially verified and largely refuted —
+`docs/research/contact-strategy-findings.md`. Full breakdown:
 `docs/status.md`.
 
 The pipeline has already produced real Gmail drafts against live tracker
@@ -196,6 +212,26 @@ matches and correctly closed out a company via the prior-contact check
    deterministic. Corpus re-judged (303 postings), tiers on the judge's
    scale: strong ≥70, spend bar 65. Full derivation and the risk taken:
    `docs/qualify.md`, "The judge becomes the score".
+10. **Contact selection redesigned on verified research** [DONE
+   2026-08-26] — a deep-research report on contact strategy was
+   commissioned (`docs/research/contact-strategy-brief.md`) and its
+   claims adversarially verified before ingestion: seven parallel
+   verification agents against primary sources, plus this repo's own 625
+   cached board responses. Most of the report failed verification — its
+   #1 recommendation (drop the résumé PDF, new sending domain,
+   apply-first) inverted under primary sources, and its ATS-API and
+   LinkedIn contact substrates turned out fabricated or auth-walled —
+   which vindicated Agent 1's agentic approach as what the data landscape
+   actually permits. What survived became the redesign: Agent 1 returns a
+   ranked slate of up to 3 candidates (the trust fix — selection is now a
+   human-arbitrated decision; `verify-slate` resolves reachability first,
+   and the slate is stored on the claim and rendered in the review UI);
+   one follow-up bump per company (the yield fix — the only policy
+   amendment, see the invariants); `personalization_context` flows from
+   Agent 1's research to the drafter as the one deliberate window in the
+   research/draft wall; and Hunter's roster now backs both slate
+   resolution and `resolve_address`, with the domain-search cached per
+   domain. Full verdicts: `docs/research/contact-strategy-findings.md`.
 
 The profile no longer blocks anything — it is hand-written in
 `qualify/profile.py` from the current resume, and Instaply's `parser.py` was
@@ -217,6 +253,9 @@ Full reasoning for each: `docs/decisions.md`.
 | Recruiters are a first-class contact target | likeliest responder after the hiring manager; the old ban confused the channel with the person |
 | Replies are tracked per contact role | "which contacts respond" was unanswerable, so targeting arguments could never be settled |
 | The judge's 0-100 is the QUALIFY score | the deterministic composite was measured to be a lossy copy of the judge that only subtracted; deleted, not down-weighted |
+| Agent 1 returns a slate, the human picks | a committed single pick hid the one decision that most needed review; the slate makes selection arbitrable at zero marginal human time |
+| One follow-up bump, never a sequence | follow-up lift is the most replicated finding in the outreach literature; sequences import bulk-sales cadence into one-to-one candidate mail |
+| Personal Gmail and the attached résumé stay | the research report's deliverability case collapsed under primary sources — a fresh domain is the documented spam signal, and an unsolicited cloud link is the documented phishing pattern (docs/research/contact-strategy-findings.md) |
 
 ## Commands
 
@@ -237,8 +276,11 @@ these directly. Under the hood it's `outreach_run.py`:
 
 ```bash
 python3 outreach_run.py prepare --days 1 --json     # who's worth a contact call
+python3 outreach_run.py verify-slate                # which slate candidates are reachable (JSON stdin)
 python3 outreach_run.py status                      # pending drafts / contacted companies
 python3 outreach_run.py finalize                    # verify + Gmail draft + claim (JSON on stdin)
+python3 outreach_run.py bumps                       # who's due their one follow-up
+python3 outreach_run.py bump <company>              # draft it, in-thread (body on stdin)
 ```
 
 This writes to local `outreach.db`, not `tracker.db` — see

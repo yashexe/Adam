@@ -265,3 +265,84 @@ blends (swept — no weight where the composite demonstrably helps).
 *Consequence:* the judge's rubric fields (shape/seniority/domain/reason)
 carry the audit trail extraction promised. Numbers and method:
 `docs/qualify.md`, "The LLM-extraction composite, tested and declined".
+
+---
+
+**Agent 1 returns a ranked slate of up to three candidates; the human
+picks.** *(2026-08-26)*
+*Why:* the maintainer's stated distrust of contact selection was diagnosed
+(via the verified research pass, see below) as a process problem, not a
+finding problem — the agent went 5/5 on real people, but it *committed* to
+one invisibly, so a wrong ladder call surfaced only after the drafting
+spend, as a discard. A slate makes the selection a reviewable decision at
+the moment the human is already reviewing, and `verify-slate` resolves
+reachability per candidate first (one cached domain-search; verification
+credits spent only until the first deliverable candidate), so the
+2026-08-25 failure mode — full research spent, then verify kills the only
+pick — became a visible "pick #2 instead".
+*Alternatives:* keep the single pick and tune the ladder (rejected — no
+role-level evidence exists to tune it with; both of the report's
+quantitative ladder claims were fabricated or untraceable); a second
+LLM judge over the pick (rejected — adds a model where ten seconds of
+existing human review does better).
+*Consequence:* the slate is stored on the claim (`contact_slate`) and
+rendered in the review UI next to source_notes; finalize still
+independently re-verifies whichever candidate is chosen. Absorbed into
+the ladder: at sub-30-person companies the founder/CTO *is* rung 1, a
+fact about who the hiring manager is, not a preference change.
+
+---
+
+**One follow-up bump per company — the single-send rule amended, the only
+policy the research changed.** *(2026-08-26)*
+*Why:* the one recommendation from the contact-strategy report that
+survived adversarial verification with independent support: follow-up
+lift replicates across every dataset examined (Backlinko/Pitchbox 12M
+emails, Woodpecker 20M+), and candidate-specific evidence (Accountemps
+survey of 300+ HR managers, practitioner consensus) shows one polite
+follow-up is expected, at job-search spacing (5–7+ business days), not
+sales spacing (day 4). A no-reply under the old policy was terminal by
+construction, which forfeited the most replicated effect in the space.
+*Alternatives:* keep one-and-done (rejected — the single-send rule was
+argued from politeness, and the evidence contradicts it); sequences of
+2–3+ touches (rejected — diminishing returns after the second touch in
+every dataset, and candidate norms are stricter than sales norms);
+contacting a second person after silence (rejected — reopens per-company
+dedup for a marginal, unevidenced gain).
+*Consequence:* `bumps` classifies contacted companies (checking Gmail
+live first so a bump can never cross a reply or follow a bounce); `bump`
+drafts a two-sentence reply into the original thread, résumé deliberately
+not re-attached; `outreach_log.follow_up_at` makes a second bump a store
+error, same enforcement pattern as the dedup key. One company, one
+person, one thread — now at most two touches.
+
+---
+
+**The contact-strategy research report's remaining recommendations,
+rejected on verification.** *(2026-08-26)*
+*Why:* the report's load-bearing claims were adversarially verified
+against primary sources before ingestion (seven parallel verification
+agents; full verdicts in `docs/research/contact-strategy-findings.md`),
+and most failed. Rejected, with the finding that killed each: moving to a
+Google Workspace custom domain (bulk-sender rules trigger at ~5,000
+msgs/day; a fresh domain is the documented spam signal — Spamhaus
+auto-blocklists newly registered domains); dropping the résumé PDF for a
+hosted link (Gmail/Proofpoint/Mimecast documentation never treats a small
+clean PDF from an authenticated sender as a spam signal, and an
+unsolicited cloud-doc link is a documented phishing pattern); ATS-API
+contact discovery (zero person fields in any unauthenticated Ashby or
+Greenhouse surface — verified against docs, live boards, hosted-page
+JSON, and GraphQL schema probes); automated LinkedIn hiring-team
+extraction (auth-walled; the "cookie-less" vendor's own schema lacks the
+field; the Proxycurl suit defines the risk); BounceBan/Scrubby catch-all
+vendors (bulk-sender economics, no identity data, 24–72h latency against
+a speed-premised pipeline); mandatory apply-before-email (contradicted by
+the report's own citation; the ATS-friction mechanism is a one-step
+Maildrop forward per Greenhouse's own docs).
+*Consequence:* sending stays on the aged personal Gmail with the résumé
+attached; Hunter stays the one verification vendor; outreach stays
+independent of applying (same-day parallel applying remains a human
+choice, and drafts never lead with it); no LinkedIn automation ever
+touches this pipeline — the one legitimate consumption is Yash glancing
+at a posting's hiring-team card in his own logged-in browser during
+review.

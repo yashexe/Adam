@@ -63,25 +63,24 @@ also what actually makes the execution-model change above worth doing:
 without it, a scheduled trigger just moves the fetch-and-score latency onto
 a timer instead of removing it.
 
-## Give Agent 1 a head start instead of researching blind
+## Give Agent 1 a head start instead of researching blind — [DONE 2026-08-26]
 
-Agent 1 runs 50–80k tokens and 15–30 tool calls per company — the most
-expensive step in the pipeline by a wide margin (Agent 2 runs ~20k tokens
-and one `Read` call). On 2026-08-25, 2 of 3 companies run through the live
-skill (company-h, company-i) had real research spent on them and then failed at
-the deterministic verify step anyway — a name conflict and an invalid
-address pattern, respectively. That's expensive research thrown away by
-information the pipeline already had access to, just not until afterward.
-
-Hunter's domain-search endpoint (already called during verification) hands
-back every real address on file at a domain along with the name attached
-to each one. Nothing stops handing Agent 1 that roster *before* it starts
-researching, as a hint rather than an answer — it still does the judgment
-of who the right target is, and `verify` still independently confirms
-deliverability, so the strict separation between the two stays intact.
-What changes is Agent 1 gets to research toward a person already confirmed
-to have a real inbox, instead of finding out after the fact that its pick
-doesn't.
+Resolved by the contact-selection redesign, in a different shape than
+sketched here. The problem was real — on 2026-08-25, 2 of 3 companies run
+through the live skill (company-h, company-i) burned 50–80k tokens of research
+and then died at the deterministic verify step — but the fix landed
+downstream of Agent 1 rather than inside its prompt: Agent 1 now returns
+a ranked slate of up to three candidates, and `verify-slate` resolves
+every one of them against Hunter's roster and domain pattern (one cached
+domain-search for the whole slate) *before* anything is drafted, so a
+dead #1 means the human picks #2 instead of the company being wasted.
+`resolve_address` also gained a direct roster-match fallback, which
+covers the "Hunter knows this person under a local part the pattern
+doesn't render" case. Handing the roster to Agent 1 up front was
+deliberately not done: the roster arrives keyed by domain, which Agent 1
+discovers mid-research, and the slate gets the same benefit without
+putting Hunter data inside an agent prompt. Details:
+`docs/research/contact-strategy-findings.md`.
 
 ## Not on this list
 

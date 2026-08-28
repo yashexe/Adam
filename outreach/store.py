@@ -46,6 +46,11 @@ CREATE TABLE IF NOT EXISTS pending_outreach (
     -- uncertain. Discarded until 2026-08-24, which meant a draft could
     -- never be reviewed for *why* that contact was chosen.
     source_notes    TEXT,
+    -- The full ranked slate Agent 1 returned (JSON array), so a draft can
+    -- be reviewed against the alternatives that were NOT chosen — the
+    -- selection is a human-visible decision since 2026-08-26, not a
+    -- single committed pick (docs/research/contact-strategy-findings.md).
+    contact_slate   TEXT,
     -- A higher-scoring posting that appeared after the draft was written.
     -- Recorded, never swapped in: see update_posting().
     superseded_note TEXT,
@@ -71,7 +76,12 @@ CREATE TABLE IF NOT EXISTS outreach_log (
     -- "which kind of contact actually responds" was unanswerable and every
     -- argument about targeting stayed a matter of opinion.
     replied_at      TEXT,
-    reply_checked_at TEXT
+    reply_checked_at TEXT,
+    -- When the one permitted follow-up bump was drafted. NULL means it is
+    -- still available. Set at bump-draft creation, not at send: one bump
+    -- per company is the whole policy, so "a bump was prepared" is the
+    -- fact that must never happen twice (docs/decisions.md, follow-up).
+    follow_up_at    TEXT
 );
 """
 
@@ -79,8 +89,9 @@ CREATE TABLE IF NOT EXISTS outreach_log (
 # exists, so databases created before reply tracking need these bolted on.
 # Idempotent, runs on every connect.
 _ADDED_COLUMNS = {
-    "outreach_log": ("contact_role", "replied_at", "reply_checked_at"),
-    "pending_outreach": ("source_notes",),
+    "outreach_log": ("contact_role", "replied_at", "reply_checked_at",
+                     "follow_up_at"),
+    "pending_outreach": ("source_notes", "contact_slate"),
 }
 
 
@@ -158,6 +169,7 @@ def record_draft(
     confidence: str | None = None,
     draft_subject: str | None = None,
     source_notes: str | None = None,
+    contact_slate: str | None = None,
 ) -> None:
     """Claim a company. Raises AlreadyClaimed if it is spoken for.
 
@@ -183,9 +195,11 @@ def record_draft(
         conn.execute(
             "INSERT OR REPLACE INTO pending_outreach (company_slug, platform, job_id, "
             "job_title, job_url, score, contact_name, contact_role, contact_email, "
-            "confidence, draft_subject, source_notes) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            "confidence, draft_subject, source_notes, contact_slate) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (company_slug, platform, job_id, job_title, job_url, score, contact_name,
-             contact_role, contact_email, confidence, draft_subject, source_notes),
+             contact_role, contact_email, confidence, draft_subject, source_notes,
+             contact_slate),
         )
         conn.commit()
 
@@ -257,26 +271,62 @@ def discard_draft(company_slug: str) -> sqlite3.Row:
     return existing
 
 
-def mark_sent(*, company_slug: str, contact_email: str, outcome: str = "sent") -> None:
+def mark_sent(
+    *,
+    company_slug: str,
+    contact_email: str,
+    outcome: str = "sent",
+    sent_at: str | None = None,
+) -> None:
     """Record that outreach went out. After this the company is closed.
 
     The contact's role is copied across from the claim, because reply rates
     are only interesting broken down by *who* was emailed.
+
+    `sent_at` lets reconciliation record when the send actually happened
+    (Gmail's Date header) instead of when this row was written. The two
+    diverged by three weeks once — company-a was hand-sent 2026-08-04 and
+    recorded 2026-08-24 — and the follow-up window math reads this column,
+    so the row-creation default is only right for sends the pipeline
+    witnesses as they happen.
     """
     _, claim = claim_state(company_slug)
     role = claim["contact_role"] if claim and "contact_role" in claim.keys() else None
     with connect() as conn:
-        conn.execute(
-            "INSERT OR IGNORE INTO outreach_log "
-            "(company_slug, contact_email, outcome, contact_role) VALUES (?,?,?,?)",
-            (company_slug, contact_email, outcome, role),
-        )
+        if sent_at:
+            conn.execute(
+                "INSERT OR IGNORE INTO outreach_log "
+                "(company_slug, contact_email, outcome, contact_role, sent_at) "
+                "VALUES (?,?,?,?,?)",
+                (company_slug, contact_email, outcome, role, sent_at),
+            )
+        else:
+            conn.execute(
+                "INSERT OR IGNORE INTO outreach_log "
+                "(company_slug, contact_email, outcome, contact_role) VALUES (?,?,?,?)",
+                (company_slug, contact_email, outcome, role),
+            )
         conn.execute(
             "UPDATE pending_outreach SET status='sent', updated_at=datetime('now') "
             "WHERE company_slug=?",
             (company_slug,),
         )
         conn.commit()
+
+
+def claim_row(company_slug: str) -> sqlite3.Row | None:
+    """The pending_outreach row regardless of status.
+
+    The claim record (job title, contact name, slate) survives the move to
+    'sent', and the follow-up flow reads it for context the log row
+    deliberately does not carry — `claim_state` is not usable for this
+    because it returns the log row once a company is sent.
+    """
+    with connect() as conn:
+        return conn.execute(
+            "SELECT * FROM pending_outreach WHERE company_slug = ?",
+            (company_slug,),
+        ).fetchone()
 
 
 def record_reply_check(
@@ -300,6 +350,39 @@ def record_reply_check(
                 "UPDATE outreach_log SET reply_checked_at=? WHERE company_slug=?",
                 (checked_at, company_slug),
             )
+        conn.commit()
+
+
+def record_follow_up(company_slug: str) -> None:
+    """Mark that the one permitted follow-up bump was drafted.
+
+    Refuses a second bump and refuses to bump a company that already
+    replied — both at the store, not the caller, for the same reason the
+    dedup key lives in the schema.
+    """
+    with connect() as conn:
+        row = conn.execute(
+            "SELECT follow_up_at, replied_at FROM outreach_log "
+            "WHERE company_slug = ?",
+            (company_slug,),
+        ).fetchone()
+        if row is None:
+            raise ValueError(f"{company_slug} was never contacted; nothing to bump")
+        if row["follow_up_at"]:
+            raise AlreadyClaimed(
+                f"{company_slug} already got its one follow-up on "
+                f"{row['follow_up_at']} — there is no second bump"
+            )
+        if row["replied_at"]:
+            raise AlreadyClaimed(
+                f"{company_slug} replied on {row['replied_at']} — a reply is "
+                f"answered by a human, never bumped"
+            )
+        conn.execute(
+            "UPDATE outreach_log SET follow_up_at=datetime('now') "
+            "WHERE company_slug=?",
+            (company_slug,),
+        )
         conn.commit()
 
 

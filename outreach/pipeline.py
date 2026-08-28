@@ -9,14 +9,17 @@ whether an address is real, what lands in Gmail, what is recorded — runs as
 ordinary code that can be read and tested, not as a model's decision.
 
     prepare()   stages 1-2 + dedup   -> companies worth an Agent 1 call
-      [ agent 1: find the contact ]
-      [ agent 2: write the draft  ]
+      [ agent 1: find the contact slate ]
+    resolve_candidate_slate()        -> which of them are reachable
+      [ human picks; agent 2 writes the draft ]
     finalize()  stages 4, 6, 8      -> verify, draft into Gmail, claim
+    bump_candidates() / create_bump() -> the one permitted follow-up
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import date, datetime, timedelta
 
 from qualify.boards import job_data_for
 from qualify.candidates import fetch_candidates
@@ -26,9 +29,9 @@ from qualify.semantic import cached_score
 
 from outreach import store
 from outreach.draft_lint import lint
-from outreach.gmail_draft import create_draft
+from outreach.gmail_draft import create_draft, create_reply_draft
 from outreach.history import prior_contacts
-from outreach.verify import resolve_address, verify_email
+from outreach.verify import DEFERRED, resolve_address, resolve_slate, verify_email
 
 # The score IS the judge's 0-100 since 2026-08-26 (docs/qualify.md, "The
 # judge becomes the score"). 65 is the judge scale's own boundary between
@@ -149,6 +152,252 @@ def prepare(
     return out, skipped
 
 
+def resolve_candidate_slate(
+    domain: str, candidates: list[dict], *, observed_address: str | None = None
+) -> list[dict]:
+    """Resolve reachability for Agent 1's ranked slate, before the human
+    picks and before anything is drafted.
+
+    One cached domain-search covers all candidates; a verification credit
+    is spent only until the first deliverable address (outreach/verify.py,
+    resolve_slate). This is advisory — finalize() re-resolves whichever
+    candidate is actually chosen, and its result is the one that binds.
+    DEFERRED (resolvable, deliberately unverified) is exposed as an empty
+    label with the reason carrying the explanation, so no consumer needs
+    to know the constant.
+    """
+    names = [c.get("name") or "" for c in candidates]
+    resolutions = resolve_slate(names, domain, fallback=observed_address)
+    out = []
+    for cand, res in zip(candidates, resolutions):
+        merged = dict(cand)
+        merged.update({
+            "address": res.address,
+            "address_source": res.source,
+            "verify_label": "" if res.label == DEFERRED else res.label,
+            "verify_score": res.score,
+            "verify_reason": res.reason,
+        })
+        out.append(merged)
+    return out
+
+
+# The follow-up window, in business days since send. Below the floor a bump
+# is premature (job-search practice runs slower than the sales cadences the
+# research report imported — see docs/research/contact-strategy-findings.md);
+# past the ceiling a "bump" of a weeks-old email reads as a re-send, and is
+# surfaced as stale for a deliberate human call rather than offered.
+BUMP_MIN_BUSINESS_DAYS = 5
+BUMP_MAX_BUSINESS_DAYS = 15
+
+
+def _business_days_since(sent_at: str) -> int:
+    """Whole business days between a store timestamp ('YYYY-MM-DD ...',
+    UTC) and today. Weekends don't count; a Friday send is bumpable the
+    next Friday, not on Wednesday."""
+    try:
+        sent = datetime.strptime(sent_at[:10], "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        return 0
+    days, current = 0, sent
+    while current < date.today():
+        current += timedelta(days=1)
+        if current.weekday() < 5:
+            days += 1
+    return days
+
+
+def record_reply_findings(contacts: list[dict], states: dict, checked_at: str) -> None:
+    """Persist what a live Gmail reply check found, for every definitive
+    state. UNKNOWN is never recorded — "could not check" must stay
+    distinguishable from silence. A REPLIED state whose Date header failed
+    to parse is recorded at `checked_at` rather than dropped: the reply is
+    the fact that arms the no-bump-after-reply gate; its exact timestamp
+    is secondary. Shared by the replies command and the bump flow so the
+    recording semantics cannot drift between the two write paths.
+    """
+    from outreach import replies as reply_check
+
+    for row in contacts:
+        state = states.get(row["company_slug"])
+        if not state or state.state == reply_check.UNKNOWN:
+            continue
+        replied_at = None
+        if state.state == reply_check.REPLIED:
+            replied_at = state.replied_at or checked_at
+        store.record_reply_check(
+            row["company_slug"], replied_at=replied_at, checked_at=checked_at
+        )
+
+
+def _bump_status(row: dict, state, elapsed: int) -> tuple[str, str]:
+    """Classify one contacted company for the follow-up. Pure — the caller
+    owns recording. The branch order IS the policy: an answer (reply, then
+    bounce) beats the one-bump cap, which beats the window; too_soon comes
+    before unknown because rows below the floor are deliberately never
+    checked against Gmail (no result there could change anything).
+    """
+    from outreach import replies as reply_check
+
+    if row.get("replied_at") or (state and state.state == reply_check.REPLIED):
+        return "replied", "they wrote back — answering is a human job, not a bump"
+    if state and state.state == reply_check.BOUNCED:
+        return "bounced", (f"bounce from {state.reply_from} — the address was "
+                           f"wrong; a bump would bounce too")
+    if row.get("follow_up_at"):
+        return "bumped", f"follow-up already drafted {row['follow_up_at']}"
+    if elapsed < BUMP_MIN_BUSINESS_DAYS:
+        return "too_soon", (f"{elapsed} business day(s) since send; eligible "
+                            f"at {BUMP_MIN_BUSINESS_DAYS}")
+    if state is None or state.state == reply_check.UNKNOWN:
+        return "unknown", ("could not confirm silence against Gmail; not "
+                           "offering a bump on a guess")
+    if elapsed > BUMP_MAX_BUSINESS_DAYS:
+        return "stale", (f"{elapsed} business days out — past the bump window; "
+                         f"only worth reopening with genuinely new information")
+    return "eligible", f"silent for {elapsed} business days"
+
+
+def bump_candidates() -> list[dict]:
+    """Every contacted company, classified for the one permitted follow-up.
+
+    Checks Gmail live for replies before offering anything — a bump
+    crossing a reply in the mail is the failure this flow exists to
+    prevent — and records what the check finds, so the data is kept even
+    when no bump happens. Gmail is consulted only where the answer could
+    matter: rows at or past the window floor without a recorded reply.
+    Already-bumped rows stay in that set — a reply that arrives *after*
+    the bump must still be seen, or "bumped" would read as silence
+    forever. Rows below the floor are skipped (nothing a check finds
+    could change "too_soon"); the `replies` command owns long-tail
+    tracking.
+    """
+    from outreach import replies as reply_check
+
+    contacted = [dict(r) for r in store.contacted()]
+    if not contacted:
+        return []
+
+    elapsed_by_slug = {
+        r["company_slug"]: _business_days_since(r["sent_at"]) for r in contacted
+    }
+    needs_check = [
+        r for r in contacted
+        if not r.get("replied_at")
+        and elapsed_by_slug[r["company_slug"]] >= BUMP_MIN_BUSINESS_DAYS
+    ]
+    states = reply_check.check(needs_check) if needs_check else {}
+    checked_at = reply_check.now_utc()
+    record_reply_findings(needs_check, states, checked_at)
+
+    out = []
+    for row in contacted:
+        slug = row["company_slug"]
+        elapsed = elapsed_by_slug[slug]
+        status, detail = _bump_status(row, states.get(slug), elapsed)
+        claim = store.claim_row(slug)
+        out.append({
+            "company_slug": slug,
+            "contact_email": row["contact_email"],
+            "contact_name": claim["contact_name"] if claim else None,
+            "contact_role": row.get("contact_role"),
+            "job_title": claim["job_title"] if claim else None,
+            "sent_at": row["sent_at"],
+            "business_days": elapsed,
+            "status": status,
+            "detail": detail,
+        })
+    return out
+
+
+def create_bump(company_slug: str, body: str) -> dict:
+    """Put the one permitted follow-up into Gmail Drafts, in-thread.
+
+    Every refusal fires BEFORE the draft is appended. The first version
+    appended first and let `record_follow_up` refuse afterwards, which
+    meant the refusal arrived with the forbidden duplicate already sitting
+    in Gmail Drafts one click from sending — a guard reduced to
+    bookkeeping. The checks, in order: the company was really sent to; its
+    one bump is unspent; no reply is recorded; the window floor has
+    passed; the body clears the same lint every other draft does; and
+    Gmail confirms live, right now, that the thread is still silent — a
+    morning `bumps` listing is not evidence about the afternoon. Only then
+    is the draft appended and the bump recorded, with the store guard
+    remaining as the backstop for a concurrent race.
+    """
+    from outreach import replies as reply_check
+
+    state, log_row = store.claim_state(company_slug)
+    if state != "sent":
+        raise ValueError(
+            f"{company_slug} is not a contacted company (state: {state}); "
+            f"bumps only follow a real send"
+        )
+    row = dict(log_row)
+    if row.get("follow_up_at"):
+        raise store.AlreadyClaimed(
+            f"{company_slug} already got its one follow-up on "
+            f"{row['follow_up_at']} — there is no second bump"
+        )
+    if row.get("replied_at"):
+        raise store.AlreadyClaimed(
+            f"{company_slug} replied on {row['replied_at']} — a reply is "
+            f"answered by a human, never bumped"
+        )
+    elapsed = _business_days_since(row["sent_at"])
+    if elapsed < BUMP_MIN_BUSINESS_DAYS:
+        raise ValueError(
+            f"{company_slug} was sent to {elapsed} business day(s) ago; a "
+            f"bump is premature before {BUMP_MIN_BUSINESS_DAYS}"
+        )
+    issues = lint(body)
+    if issues:
+        listed = "; ".join(str(i) for i in issues[:4])
+        raise ValueError(
+            f"bump body needs another pass ({len(issues)} issue(s)): {listed}"
+        )
+
+    states = reply_check.check([row])
+    checked_at = reply_check.now_utc()
+    record_reply_findings([row], states, checked_at)
+    live = states.get(company_slug)
+    if live is None or live.state == reply_check.UNKNOWN:
+        raise RuntimeError(
+            f"could not confirm against Gmail that {row['contact_email']} "
+            f"stayed silent; not bumping on a guess"
+        )
+    if live.state == reply_check.REPLIED:
+        raise store.AlreadyClaimed(
+            f"{company_slug} replied ({live.replied_at or 'time unknown'}, "
+            f"now recorded) — answer it instead of bumping"
+        )
+    if live.state == reply_check.BOUNCED:
+        raise ValueError(
+            f"the original email to {row['contact_email']} bounced — the "
+            f"address was wrong, and a bump would bounce too"
+        )
+
+    subject = create_reply_draft(to=row["contact_email"], body=body)
+    try:
+        store.record_follow_up(company_slug)
+    except store.AlreadyClaimed as exc:
+        # A concurrent invocation won the race between our pre-flight and
+        # this record. Surface it loudly instead of auto-trashing: the two
+        # drafts are identical, and trash_draft matches by subject, so a
+        # cleanup here could destroy the legitimate one too.
+        raise store.AlreadyClaimed(
+            f"{exc} — NOTE: this call had already appended a duplicate bump "
+            f"draft ('{subject}' to {row['contact_email']}); delete one in "
+            f"Gmail Drafts"
+        ) from None
+    return {
+        "company_slug": company_slug,
+        "contact_email": row["contact_email"],
+        "subject": subject,
+        "status": "bump_drafted",
+    }
+
+
 @dataclass
 class FinalizeResult:
     company_slug: str
@@ -168,6 +417,7 @@ def finalize(
     body: str,
     observed_address: str | None = None,
     source_notes: str | None = None,
+    contact_slate: str | None = None,
     ignore_prior_contact: bool = False,
     ignore_lint: bool = False,
 ) -> FinalizeResult:
@@ -233,7 +483,7 @@ def finalize(
         score=candidate.score, contact_name=contact_name,
         contact_role=contact_role, contact_email=email,
         confidence=verification.label, draft_subject=subject,
-        source_notes=source_notes,
+        source_notes=source_notes, contact_slate=contact_slate,
     )
     return FinalizeResult(
         slug, email, verification.label, True,
