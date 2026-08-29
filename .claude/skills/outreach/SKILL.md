@@ -247,10 +247,15 @@ information.
   on every subsequent run of the same window since judgements are cached.
 - Agent 1 runs 50–80k tokens and 15–30 tool calls per company.
 - Hunter: one domain-search per company (cached per domain, shared by
-  verify-slate and finalize) plus one verification per address actually
-  tried — verify-slate stops spending at the first deliverable candidate,
-  and finalize's re-verification of the chosen address is a cache hit.
-  Typically 2–3 credits per company against a 100/month tier.
+  verify-slate and finalize). Since 2026-08-29 that roster lookup is the
+  only thing Hunter's free credits are reserved for — mailbox probes walk
+  a provider chain first (ZeroBounce, MillionVerifier, each active when
+  its key is in `.env`; Hunter last), so a company typically costs 1
+  Hunter credit plus 1–2 probes at whichever provider has quota.
+  verify-slate stops spending at the first deliverable candidate, and
+  finalize's re-verification of the chosen address is a cache hit. If
+  every provider is exhausted, drafts land labeled `unverified` — say so
+  plainly in the report rather than treating it as verified.
 
 Both are per-company, which is why dedup claims a company on first attempt
 rather than re-researching it for every new posting.

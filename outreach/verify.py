@@ -1,22 +1,34 @@
 """
 Stage 4 — deterministic email verification.
 
-Sits between Agent 1 and Agent 2 on purpose. Agent 1 produces a candidate
-address by inferring a pattern from public evidence; this step checks that
-address against Hunter.io and reduces everything it learns to a single
-label. Agent 2 receives the label and the address and nothing else — not
-the SMTP details, not Hunter's raw JSON, not Agent 1's source notes.
-Restricting what reaches the model is the point, not just gating its
-output.
+Sits between Agent 1 and Agent 2 on purpose. Agent 1 produces candidate
+people; this step resolves and checks their addresses and reduces
+everything it learns to a single label. Agent 2 receives the label and the
+address and nothing else — not the SMTP details, not any provider's raw
+JSON, not Agent 1's source notes. Restricting what reaches the model is
+the point, not just gating its output.
+
+Two distinct jobs live here, split across vendors on purpose since
+2026-08-29:
+
+- **The domain roster** (pattern + per-address names) comes from Hunter's
+  domain-search and nothing else — it is the input to `resolve_address`
+  and the `_name_conflict` identity guard, and no free alternative with
+  comparable small-company coverage exists. Hunter's free credits are
+  reserved for this: ~1 cached credit per company.
+- **Mailbox probing** is a commodity and walks `_VERIFY_PROVIDERS` —
+  free-tier providers first (ZeroBounce, MillionVerifier; each activates
+  when its key is in `.env`), Hunter last. One 12-company drain run
+  (2026-08-28) consumed a whole Hunter month mostly on probes; this split
+  is what lets the free tiers cover a real monthly volume.
 
 Nothing here raises into the pipeline. An unreachable API, a missing key,
 or an exhausted quota all degrade to `UNVERIFIED`, which is honest and lets
 a human decide. A verification step that can halt the pipeline is worse
 than one that says "I don't know".
 
-Credits: the free tier is 50/month and the verifier spends one per address.
 `verify_email` caches by address so re-running the pipeline over the same
-company is free.
+company is free, whichever provider answered.
 
     from outreach.verify import verify_email
     result = verify_email("constructed.guess@company-a.com")
@@ -135,8 +147,102 @@ def _label_from(data: dict) -> tuple[str, str]:
     return UNVERIFIED, f"unrecognized response ({status or result or 'empty'})"
 
 
+# ── Verification providers ─────────────────────────────────────────────────
+# Mailbox probing is a commodity; the domain roster is not. Hunter's free
+# credits are therefore reserved for what only Hunter provides here
+# (domain-search: pattern + per-address names, see confirm_pattern), and
+# plain verification walks this chain instead — free-tier providers first,
+# Hunter last. Each adapter activates only when its key is in .env, returns
+# a VerificationResult on an answer, or a string saying why it must be
+# skipped (no key, quota gone, API error) so the next provider gets a turn.
+# Every provider normalizes onto the same five labels; `should_block`
+# semantics are identical regardless of who answered. Added 2026-08-29,
+# after one 12-company drain run consumed the entire Hunter month.
+#
+# Adapters are written from each provider's documented v2/v3 API shape but
+# land untested until a real key exists — smoke-test with one known-good
+# address when a key is first added, and expect the defensive UNVERIFIED
+# path on any surprise rather than a crash.
+
+def _verify_via_zerobounce(email: str) -> VerificationResult | str:
+    """https://api.zerobounce.net/v2/validate — free tier ~100/month."""
+    load_dotenv(ENV_PATH)
+    key = os.getenv("ZEROBOUNCE_API_KEY")
+    if not key:
+        return "zerobounce: no ZEROBOUNCE_API_KEY"
+    payload, error = _get("https://api.zerobounce.net/v2/validate",
+                          {"api_key": key, "email": email})
+    if payload is None:
+        return f"zerobounce: {error}"
+    if payload.get("error"):
+        return f"zerobounce: {payload['error']}"
+    status = (payload.get("status") or "").lower()
+    label, reason = {
+        "valid": (VERIFIED, "SMTP-confirmed deliverable"),
+        "invalid": (INVALID, "ZeroBounce reports invalid"),
+        "catch-all": (CATCH_ALL, "domain accepts all mail; mailbox unconfirmable"),
+        # A spamtrap is a real, deliverable mailbox that exists to burn
+        # sender reputation — blocking is the only sane response.
+        "spamtrap": (INVALID, "ZeroBounce flags a spamtrap"),
+        "abuse": (RISKY, "ZeroBounce flags an abuse-prone address"),
+        "do_not_mail": (RISKY, "ZeroBounce reports do_not_mail"),
+        "unknown": (RISKY, "ZeroBounce could not conclude"),
+    }.get(status, (UNVERIFIED, f"unrecognized ZeroBounce status ({status or 'empty'})"))
+    return VerificationResult(email=email, label=label, score=None,
+                              reason=reason, raw=payload)
+
+
+def _verify_via_millionverifier(email: str) -> VerificationResult | str:
+    """https://api.millionverifier.com/api/v3 — pay-as-you-go with free credits."""
+    load_dotenv(ENV_PATH)
+    key = os.getenv("MILLIONVERIFIER_API_KEY")
+    if not key:
+        return "millionverifier: no MILLIONVERIFIER_API_KEY"
+    payload, error = _get("https://api.millionverifier.com/api/v3/",
+                          {"api": key, "email": email})
+    if payload is None:
+        return f"millionverifier: {error}"
+    if payload.get("error"):
+        return f"millionverifier: {payload['error']}"
+    result = (payload.get("result") or "").lower()
+    label, reason = {
+        "ok": (VERIFIED, "SMTP-confirmed deliverable"),
+        "invalid": (INVALID, "MillionVerifier reports invalid"),
+        "disposable": (INVALID, "disposable address domain"),
+        "catch_all": (CATCH_ALL, "domain accepts all mail; mailbox unconfirmable"),
+        "unknown": (RISKY, "MillionVerifier could not conclude"),
+    }.get(result, (UNVERIFIED, f"unrecognized MillionVerifier result ({result or 'empty'})"))
+    return VerificationResult(email=email, label=label, score=None,
+                              reason=reason, raw=payload)
+
+
+def _verify_via_hunter(email: str) -> VerificationResult | str:
+    key = _api_key()
+    if not key:
+        return f"hunter: no HUNTER_API_KEY in {ENV_PATH}"
+    payload, error = _get(VERIFIER_URL, {"email": email, "api_key": key})
+    if payload is None:
+        return f"hunter: {error}"
+    data = payload.get("data") or {}
+    label, reason = _label_from(data)
+    return VerificationResult(email=email, label=label,
+                              score=data.get("score"), reason=reason, raw=data)
+
+
+_VERIFY_PROVIDERS = (
+    ("zerobounce", _verify_via_zerobounce),
+    ("millionverifier", _verify_via_millionverifier),
+    ("hunter", _verify_via_hunter),
+)
+
+
 def verify_email(email: str, *, use_cache: bool = True) -> VerificationResult:
-    """Check one address. Spends one Hunter credit unless cached."""
+    """Check one address via the first provider able to answer.
+
+    Spends one credit at whichever provider answers, unless cached. With no
+    alternate keys configured this behaves exactly as the Hunter-only
+    version did.
+    """
     cache = _load_cache()
     if use_cache and email in cache:
         entry = cache[email]
@@ -148,32 +254,28 @@ def verify_email(email: str, *, use_cache: bool = True) -> VerificationResult:
             raw=entry.get("raw", {}),
         )
 
-    key = _api_key()
-    if not key:
-        return VerificationResult(
-            email=email,
-            label=UNVERIFIED,
-            reason=f"no HUNTER_API_KEY in {ENV_PATH}",
-        )
+    skips: list[str] = []
+    for name, provider in _VERIFY_PROVIDERS:
+        outcome = provider(email)
+        if isinstance(outcome, str):
+            skips.append(outcome)
+            continue
+        reason = outcome.reason if name == "hunter" else f"{outcome.reason} (via {name})"
+        cache[email] = {
+            "label": outcome.label,
+            "score": outcome.score,
+            "reason": reason,
+            "provider": name,
+            "raw": outcome.raw,
+        }
+        _save_cache(cache)
+        outcome.reason = reason
+        return outcome
 
-    payload, error = _get(VERIFIER_URL, {"email": email, "api_key": key})
-    if payload is None:
-        return VerificationResult(email=email, label=UNVERIFIED, reason=error)
-
-    data = payload.get("data") or {}
-    label, reason = _label_from(data)
-    result = VerificationResult(
-        email=email, label=label, score=data.get("score"), reason=reason, raw=data
+    return VerificationResult(
+        email=email, label=UNVERIFIED,
+        reason="no provider could answer: " + "; ".join(skips),
     )
-
-    cache[email] = {
-        "label": label,
-        "score": data.get("score"),
-        "reason": reason,
-        "raw": data,
-    }
-    _save_cache(cache)
-    return result
 
 
 # A week: long enough that a slate resolution and its finalize share one
