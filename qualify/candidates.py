@@ -21,7 +21,11 @@ from __future__ import annotations
 import json
 import subprocess
 
-PI_HOST = "pi@raspberrypi.local"
+# mDNS first, LAN IP second: the Pi's WiFi flap sometimes takes down its
+# .local advertisement while SSH by address still works (observed
+# 2026-08-28). The IP is a DHCP lease, so it stays the fallback, not the
+# name of record.
+PI_HOSTS = ("pi@raspberrypi.local", "pi@10.0.0.147")
 PI_PYTHON = "~/ashby-ny-tracker/.venv/bin/python3"
 PI_DB = "/home/pi/ashby-ny-tracker/tracker.db"
 
@@ -72,15 +76,18 @@ def fetch_candidates(
     applies -- every NY posting seen, regardless of title.
     """
     script = _REMOTE_SCRIPT.replace("DB_PATH", PI_DB)
-    result = subprocess.run(
-        ["ssh", "-o", "ConnectTimeout=10", "-o", "BatchMode=yes",
-         PI_HOST, f"{PI_PYTHON} - {days} {'1' if role_filter else '0'}"],
-        input=script, capture_output=True, text=True, timeout=120,
-    )
-    if result.returncode != 0:
-        raise RuntimeError(
-            f"could not read the tracker DB on {PI_HOST} "
-            f"(the Pi's WiFi is known to flap; see PI.md):\n{result.stderr.strip()}"
+    errors = []
+    for host in PI_HOSTS:
+        result = subprocess.run(
+            ["ssh", "-o", "ConnectTimeout=10", "-o", "BatchMode=yes",
+             host, f"{PI_PYTHON} - {days} {'1' if role_filter else '0'}"],
+            input=script, capture_output=True, text=True, timeout=120,
         )
-    rows = json.loads(result.stdout)
-    return rows[:limit] if limit else rows
+        if result.returncode == 0:
+            rows = json.loads(result.stdout)
+            return rows[:limit] if limit else rows
+        errors.append(f"{host}: {result.stderr.strip()}")
+    raise RuntimeError(
+        "could not read the tracker DB on any known host "
+        "(the Pi's WiFi is known to flap; see PI.md):\n" + "\n".join(errors)
+    )
