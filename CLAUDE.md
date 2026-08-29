@@ -31,8 +31,11 @@ in the loop, which ashby-ny-tracker deliberately has none of.
 [3.5] Pick     det./human  verify-slate resolves reachability; human picks
 [4] Verify     det.      Hunter.io email verification, live — outreach/verify.py
 [5] Draft      AGENT     Agent 2 — docs/agents.md
-[6] Approve    det./human   the one gate that can't be automated away
-[7] Send       det./human   reused job_search_automation SMTP code
+[6] Approve    human    review/edit in Gmail — the one gate that can't be
+                        automated away
+[7] Send       human    a person presses Send in Gmail; the repo has no
+                        send path — drafts arrive via IMAP APPEND only
+                        (outreach/gmail_draft.py, DECIDED 2026-08-23)
 [8] Log        det.      company-level dedup; one follow-up bump per
                           company, human-sent (outreach_run.py bumps/bump)
 ```
