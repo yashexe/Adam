@@ -35,6 +35,9 @@ from outreach.pipeline import (
 )
 from qualify.semantic import build_batch, save_scores, unjudged
 
+# Cap on postings per judge invocation — see cmd_judge.
+JUDGE_BATCH_CAP = 40
+
 
 def cmd_prepare(args: argparse.Namespace) -> int:
     try:
@@ -83,8 +86,18 @@ def cmd_judge(args: argparse.Namespace) -> int:
         print(f"all {len(rows)} posting(s) in the window are already judged",
               file=sys.stderr)
         return 0
-    print(f"# {len(pending)} posting(s) to judge\n", file=sys.stderr)
-    print(build_batch(pending))
+    # One agent call judges ~40 postings reliably; a 218-posting single
+    # batch has failed outright. With Lever/Workable in the tracker the
+    # window can easily exceed the cap, so emit at most one batch per
+    # invocation and say how many remain — the caller loops judge/
+    # judge-save until this prints "already judged".
+    batch = pending[:JUDGE_BATCH_CAP]
+    note = f"# {len(batch)} posting(s) to judge"
+    if len(pending) > len(batch):
+        note += (f" ({len(pending) - len(batch)} more unjudged in the window; "
+                 f"run judge again after judge-save)")
+    print(note + "\n", file=sys.stderr)
+    print(build_batch(batch))
     return 0
 
 

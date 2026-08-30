@@ -274,7 +274,7 @@ Full reasoning for each: `docs/decisions.md`.
 | Two agents, not one | research and persuasive writing are different skills; the verify step needs a clean structured boundary between them |
 | Contact-finding is agentic, not API-only | Hunter/Apollo coverage collapses on <50-employee companies — exactly who this project targets |
 | Instaply & job_search_automation harvested, not revived | the valuable part of each is small; running either as a service duplicates infrastructure |
-| Paraform integration deferred | explicit user call — Ashby/Greenhouse stay the only discovery sources for now |
+| Paraform integration deferred | explicit user call; discovery itself is the tracker's decision, and since 2026-08-29 it also feeds Lever and Workable (`qualify/boards.py` fetches all four) |
 | No sector filter on QUALIFY | job_search_automation's company list was never a real filter to preserve |
 | Recruiters are a first-class contact target | likeliest responder after the hiring manager; the old ban confused the channel with the person |
 | Replies are tracked per contact role | "which contacts respond" was unanswerable, so targeting arguments could never be settled |

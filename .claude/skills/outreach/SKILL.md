@@ -42,13 +42,19 @@ If it prints `all N posting(s) in the window are already judged` to
 stderr, skip straight to `prepare` below — this makes re-running the
 pipeline free, since judgements are cached per posting, not per run.
 
-Otherwise it prints a batch to stdout. Invoke the `relevance-judge`
-subagent with that batch verbatim as its input (it reads `PROFILE.md`
-itself). Take its JSON array output and pipe it into:
+Otherwise it prints a batch of at most 40 postings to stdout. Invoke the
+`relevance-judge` subagent with that batch verbatim as its input (it reads
+`PROFILE.md` itself). Take its JSON array output and pipe it into:
 
 ```bash
 python3 outreach_run.py judge-save
 ```
+
+If judge's stderr said more postings remain in the window (common since
+the tracker added Lever/Workable and US-remote matches), **loop** —
+`judge` again, another subagent call, `judge-save` again — until it
+prints `already judged`. Never paste multiple batches into one subagent
+call; oversized single batches have failed outright.
 
 Then:
 

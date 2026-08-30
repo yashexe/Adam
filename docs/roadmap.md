@@ -40,8 +40,9 @@ nothing beyond the standard library plus `python-dotenv`. No `requests`, no
 `torch` — Instaply's `sentence-transformers` dependency was rejected early in
 this project for exactly this reason (dragging in a heavy dependency for one
 number, see `docs/qualify.md`), and that discipline means the deterministic
-half is already compatible with the Pi's existing Python 3.7.3 with
-essentially no porting work.
+half is already compatible with the Pi's Python — 3.11 since the
+tracker's pyenv move (docs/tracker-upstream-2026-08-30.md corrected the
+stale 3.7.3 figure here) — with essentially no porting work.
 
 Since 2026-08-26 the fit score is the judge's alone (see `docs/qualify.md`,
 "The judge becomes the score"), which narrows what the Pi could take but
@@ -81,6 +82,20 @@ deliberately not done: the roster arrives keyed by domain, which Agent 1
 discovers mid-research, and the slate gets the same benefit without
 putting Hunter data inside an agent prompt. Details:
 `docs/research/contact-strategy-findings.md`.
+
+## Quick-apply vs writeup classification (designed, Yash-approved)
+
+Yash's rule (2026-08-30): if an application form has open-ended
+questions, automation must not touch that application at all. The
+classifier that enforces this lives here, post-judge, only for postings
+above the spend bar (~10x fewer fetches than upstream placement, and the
+tracker stays frozen). Greenhouse exposes form questions via its
+documented public API; Ashby via the internal endpoint every visitor's
+browser calls (no stability promise — must fail open); Lever/Workable
+have no public form schema and stay untagged. Any long-text field, any
+fetch failure, or any unrecognized shape → treated as writeup → manual.
+Full design sketch with verified endpoints:
+`docs/tracker-upstream-2026-08-30.md`.
 
 ## Not on this list
 
