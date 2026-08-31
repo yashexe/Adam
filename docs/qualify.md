@@ -289,6 +289,7 @@ posting text where it exists:
 |---|--:|---|
 | company-m, Forward Deployed Engineer | 92 | interviewed (via Paraform) |
 | InOrbit.AI, Forward Deployed Engineer | 92 | recruiter screen (live, added 2026-08-31) |
+| Concourse Tech, Forward Deployed Engineer | 92 | recruiter outreach — inbound; posting states "US citizen (required for government work)" and the recruiter confirmed directly that it does not apply (live, added 2026-08-31) |
 | Tenex Labs, Forward Deployed Engineer | 90 | recruiter conversations — **three independent inbound reach-outs** (Tenex in-house, talentpluto, and a third agency recruiter) (live, added 2026-08-31) |
 | company-n, Forward Deployed Engineer | 88 | full loop, 3-hour NYC onsite |
 | Beacon Software, Forward Deployed Engineer | 88 | recruiter screen — inbound, recruiter reached out (live, added 2026-08-31) |
@@ -357,13 +358,42 @@ data cuts both ways: the stated policy would exclude him, yet the process
 reached a recruiter screen anyway. Left as a flag, not a rule change —
 one posting, and screens evidently happen despite stated policies.
 
+**Concourse (2026-08-31) turns that flag into a real problem with the
+rule.** Its posting states "US citizen (required for government work)" —
+unambiguously the fact `check_citizenship_required` exists to catch — and
+a recruiter reached out anyway, and when asked directly said the
+requirement does not apply. The judge scores the posting 92.
+
+Two separate findings sit inside that:
+
+1. **The detector has a phrasing gap.** `qualify/extractor.py` matches
+   "citizenship required", "must be a us citizen", and "us citizens only".
+   Concourse's phrasing ("US citizen (required for government work)")
+   matches none of them, so the posting passed eligibility by accident
+   rather than by design.
+2. **Closing that gap would have been the wrong outcome.** Had the
+   detector caught it, a live 92-scored FDE process with confirmed
+   recruiter interest would have been silently discarded before any human
+   saw it — precisely the failure mode the project's no-exclude-filters
+   rule exists to prevent.
+
+The stated-restriction record now reads: three postings carrying
+citizenship or visa restrictions, two of which produced real processes
+(InOrbit screen, Concourse inbound with the requirement explicitly
+waived) and one of which (clera) was hard-excluded before any human
+judgment. The rule was built on Yash's instruction that "if they ask US
+citizenship theres no point moving forward," which remains his call — but
+the evidence since is that stated restrictions are weaker predictors of
+actual process than the rule assumes. Recorded here rather than acted on
+unilaterally; the decision belongs to him.
+
 company-p's posting states no visa sponsorship, now or in the future — a
 hard eligibility fact the gate does not currently screen for at all
 (`qualify/eligibility.py` checks only full-time status and non-frontend
 titles). Worth a note, not a fix forced by one data point: see "What's
 explicitly not considered" below.
 
-Caveats: n=11 (7 concluded-or-deep, 4 live added 2026-08-31); the set is
+Caveats: n=12 (7 concluded-or-deep, 5 live added 2026-08-31); the set is
 survivorship-biased toward roles he chose to apply to (Beacon, Tenex,
 and Flagler, as pure inbound, are the exceptions); interview outcomes
 reflect more than role fit. The InOrbit/Beacon/Tenex scores were judged
