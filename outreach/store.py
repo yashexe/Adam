@@ -91,7 +91,7 @@ CREATE TABLE IF NOT EXISTS outreach_log (
 _ADDED_COLUMNS = {
     "outreach_log": ("contact_role", "replied_at", "reply_checked_at",
                      "follow_up_at"),
-    "pending_outreach": ("source_notes", "contact_slate"),
+    "pending_outreach": ("source_notes", "contact_slate", "linkedin_json"),
 }
 
 
@@ -170,6 +170,7 @@ def record_draft(
     draft_subject: str | None = None,
     source_notes: str | None = None,
     contact_slate: str | None = None,
+    linkedin_json: str | None = None,
 ) -> None:
     """Claim a company. Raises AlreadyClaimed if it is spoken for.
 
@@ -195,11 +196,11 @@ def record_draft(
         conn.execute(
             "INSERT OR REPLACE INTO pending_outreach (company_slug, platform, job_id, "
             "job_title, job_url, score, contact_name, contact_role, contact_email, "
-            "confidence, draft_subject, source_notes, contact_slate) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "confidence, draft_subject, source_notes, contact_slate, linkedin_json) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (company_slug, platform, job_id, job_title, job_url, score, contact_name,
              contact_role, contact_email, confidence, draft_subject, source_notes,
-             contact_slate),
+             contact_slate, linkedin_json),
         )
         conn.commit()
 

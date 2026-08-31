@@ -458,6 +458,27 @@ function slateNote(c) {
   return `<div class="note small">Slate considered:<br>${rows}</div>`;
 }
 
+// LinkedIn drafts are paste-ready text, never sent by anything here — the
+// same one-rule as email, on a platform where automation is also a ToS
+// violation. Rendered as click-to-copy blocks so the ritual is: send the
+// email, open the contact on LinkedIn, paste.
+function linkedinNote(c) {
+  if (!c.linkedin_json) return "";
+  let li;
+  try { li = JSON.parse(c.linkedin_json); } catch { return ""; }
+  const block = (label, text) => text ? `
+    <div class="small muted">${label}
+      <button class="copybtn" data-copy="${esc(text)}">copy</button></div>
+    <div class="body small">${esc(text)}</div>` : "";
+  const parts =
+    block("LinkedIn connection note (≤300 chars)", li.connection_note) +
+    block("Post-accept DM", li.post_accept_dm) +
+    block("InMail subject", li.inmail_subject) +
+    block("InMail body", li.inmail_body);
+  if (!parts) return "";
+  return `<div class="note">${parts}</div>`;
+}
+
 function card(c) {
   const g = c.gmail || {state: "unknown"};
   const canEdit = g.state === "draft";
@@ -484,6 +505,7 @@ function card(c) {
     ${vWhy ? `<div class="note small">${esc(vWhy)}</div>` : ""}
     ${c.source_notes ? `<div class="note small">Why this contact: ${esc(c.source_notes)}</div>` : ""}
     ${slateNote(c)}
+    ${linkedinNote(c)}
     <div class="note">${esc(EXPLAIN[g.state])}${
       g.sent_date ? " <br>Sent " + esc(g.sent_date) + "." : ""
     }</div>
@@ -566,6 +588,15 @@ async function refresh() {
 document.addEventListener("click", async e => {
   const btn = e.target.closest("button");
   if (!btn) return;
+
+  if (btn.classList.contains("copybtn")) {
+    try {
+      await navigator.clipboard.writeText(btn.dataset.copy);
+      btn.textContent = "copied";
+      setTimeout(() => { btn.textContent = "copy"; }, 1500);
+    } catch { flash("Copy failed — select the text by hand."); }
+    return;
+  }
 
   // Not scoped to a company: it walks every contacted thread at once.
   if (btn.dataset.act === "check-replies") {

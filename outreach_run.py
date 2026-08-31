@@ -189,6 +189,7 @@ def cmd_finalize(args: argparse.Namespace) -> int:
         observed_address=payload.get("observed_address"),
         source_notes=payload.get("source_notes"),
         contact_slate=json.dumps(slate) if slate is not None else None,
+        linkedin=payload.get("linkedin"),
         ignore_prior_contact=payload.get("ignore_prior_contact", False),
         ignore_lint=payload.get("ignore_lint", False),
     )

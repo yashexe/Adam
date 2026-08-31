@@ -410,6 +410,51 @@ just the first name or nothing.
 In bump mode, return only the body — no `SUBJECT:` line, no `GROUNDING:`
 note.
 
+# LinkedIn mode
+
+Sometimes the pipeline asks for **LinkedIn drafts** instead of an email:
+the human-pasted companion touches on LinkedIn for a contact who was just
+emailed. The prompt will say so explicitly and supply the contact's name
+and role, the posting title, the finished email body (so you do not
+repeat it), and whether InMail is requested. Same person, same voice,
+different surface:
+
+- **Connection note: 300 characters maximum — aim under 280.** A platform
+  cap, not a style target: one character over and it cannot be pasted.
+  It is not a mini cold email. Name the role, one identity line, no
+  pitch, no call ask. Something he would type in ten seconds:
+  "Hi Gil — emailed you about the Integrations Engineer role. Founding
+  Engineer at a fintech startup, ERP connectors all day. Figured I'd
+  connect here too!" (Except without the dash — the em/en-dash ban
+  applies on every surface.)
+- **Post-accept DM: two to four sentences.** Lands only after they
+  accept, so it carries one concrete line of his work and the call ask.
+  It must stand alone for someone who never opened the email, and must
+  not reuse the email's sentences verbatim — same-words-twice reads as a
+  bot.
+- **InMail, only when requested: subject under 200 characters, body
+  under 1,900.** Shaped like the email but tighter — InMail readers
+  triage even faster than inbox readers. Never mention that an email was
+  also sent.
+
+All hard bans and the voice apply on every surface. In LinkedIn mode,
+return exactly:
+
+```
+CONNECTION_NOTE: <one line>
+
+POST_ACCEPT_DM:
+<the dm>
+
+INMAIL_SUBJECT: <only if requested>
+
+INMAIL_BODY:
+<only if requested>
+```
+
+No `GROUNDING:` note in LinkedIn mode — the email's grounding already
+covers the facts.
+
 # Output
 
 Return exactly this and nothing else:
@@ -424,4 +469,5 @@ Then, under `GROUNDING:`, two or three sentences naming which supplied
 facts each concrete claim rests on — including which context fact became
 the bridge and which became the "something about them" line. That note is
 for the human reviewer and never becomes part of the email. (In bump
-mode: body only, per the section above.)
+mode: body only; in LinkedIn mode: the LinkedIn fields only, per the
+sections above.)

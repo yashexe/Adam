@@ -155,6 +155,40 @@ anything about how the contact was found. `personalization_context` is
 the one deliberate window in that wall — it carries what the company said
 publicly, not how the contact was identified.
 
+## Step 4.5 — LinkedIn drafts, by score bar
+
+LinkedIn is a second, human-pasted channel: nothing here automates any
+LinkedIn action (their ToS bans it and the one rule generalizes — Adam
+writes, Yash pastes). Which pieces a company earns depends on its judge
+score:
+
+- **Score ≥ 85**: connection note + post-accept DM + **InMail**
+  (subject + body). InMail credits are a limited monthly Premium
+  resource; this bar matches the band where all of his real interviews
+  happened, so the scarce credits go where conversion is proven.
+- **Score 70–84**: connection note + post-accept DM only.
+- **Below 70**: email only, no LinkedIn drafts.
+
+For each qualifying company, invoke the `drafter` again in **LinkedIn
+mode** (see its contract): say it is a LinkedIn request, pass the
+contact's name and role, the posting title, the finished email body, and
+whether InMail is requested (score ≥ 85). Include the result in the
+finalize payload as:
+
+```json
+"linkedin": {
+  "connection_note": "...",
+  "post_accept_dm": "...",
+  "inmail_subject": "... (>=85 only)",
+  "inmail_body": "... (>=85 only)"
+}
+```
+
+`finalize` lints these too (the 300-char note cap is a platform limit, so
+an over-cap note fails the whole finalize — send it back to the drafter
+like any lint failure). They are stored on the claim and rendered as
+copy-paste blocks in the review UI.
+
 ## Step 5 — verify, draft, record
 
 Pipe one JSON object per company into:

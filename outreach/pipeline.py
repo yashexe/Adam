@@ -18,6 +18,7 @@ ordinary code that can be read and tested, not as a model's decision.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 
@@ -28,7 +29,7 @@ from qualify.extractor import heuristic_extract_requirements
 from qualify.semantic import cached_score
 
 from outreach import store
-from outreach.draft_lint import lint
+from outreach.draft_lint import lint, lint_linkedin
 from outreach.gmail_draft import create_draft, create_reply_draft
 from outreach.history import prior_contacts
 from outreach.verify import DEFERRED, resolve_address, resolve_slate, verify_email
@@ -418,6 +419,7 @@ def finalize(
     observed_address: str | None = None,
     source_notes: str | None = None,
     contact_slate: str | None = None,
+    linkedin: dict | None = None,
     ignore_prior_contact: bool = False,
     ignore_lint: bool = False,
 ) -> FinalizeResult:
@@ -441,6 +443,11 @@ def finalize(
     # in code and the caller retries against concrete issues.
     if not ignore_lint:
         issues = lint(body)
+        if linkedin:
+            issues += lint_linkedin(
+                linkedin.get("connection_note"), linkedin.get("post_accept_dm"),
+                linkedin.get("inmail_subject"), linkedin.get("inmail_body"),
+            )
         if issues:
             listed = "; ".join(str(i) for i in issues[:4])
             return FinalizeResult(
@@ -484,6 +491,7 @@ def finalize(
         contact_role=contact_role, contact_email=email,
         confidence=verification.label, draft_subject=subject,
         source_notes=source_notes, contact_slate=contact_slate,
+        linkedin_json=json.dumps(linkedin) if linkedin else None,
     )
     return FinalizeResult(
         slug, email, verification.label, True,

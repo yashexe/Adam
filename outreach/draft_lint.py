@@ -219,3 +219,51 @@ def report(body: str, *, role: str | None = None, tier: str | None = None) -> st
     if not issues:
         return "clean"
     return "\n".join(f"  {i}" for i in issues)
+
+
+# ── LinkedIn drafts ────────────────────────────────────────────────────────
+# Platform-imposed caps, not style choices: a connection note over 300
+# characters cannot be pasted at all, and an InMail body over ~1,900 gets
+# truncated by the composer. Enforced here for the same reason the email
+# rules are -- the drafter reliably overshoots soft limits, and a char
+# count is deterministic work.
+MAX_CONNECTION_NOTE_CHARS = 300
+MAX_INMAIL_SUBJECT_CHARS = 200
+MAX_INMAIL_BODY_CHARS = 1900
+
+
+def lint_linkedin(
+    note: str | None,
+    dm: str | None = None,
+    inmail_subject: str | None = None,
+    inmail_body: str | None = None,
+) -> list[Issue]:
+    """Everything wrong with a set of LinkedIn drafts. Empty means passing.
+
+    Only supplied pieces are checked -- a company below the InMail bar
+    simply passes None for the InMail fields.
+    """
+    issues: list[Issue] = []
+    caps = (
+        ("connection note", note, MAX_CONNECTION_NOTE_CHARS),
+        ("inmail subject", inmail_subject, MAX_INMAIL_SUBJECT_CHARS),
+        ("inmail body", inmail_body, MAX_INMAIL_BODY_CHARS),
+    )
+    for name, text, cap in caps:
+        if text and len(text) > cap:
+            issues.append(Issue(
+                "over platform cap",
+                f"{name} is {len(text)} chars (max {cap}); LinkedIn will "
+                f"refuse or truncate it",
+            ))
+    for name, text in (("connection note", note), ("post-accept dm", dm),
+                       ("inmail subject", inmail_subject),
+                       ("inmail body", inmail_body)):
+        if not text:
+            continue
+        if "—" in text or "–" in text:
+            issues.append(Issue("em dash", f"{name} contains one; he does not use them"))
+        for term, why in _BANNED.items():
+            if term in text.lower():
+                issues.append(Issue("banned term", f"{name}: '{term}' ({why})"))
+    return issues
