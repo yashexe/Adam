@@ -290,12 +290,14 @@ posting text where it exists:
 | company-m, Forward Deployed Engineer | 92 | interviewed (via Paraform) |
 | InOrbit.AI, Forward Deployed Engineer | 92 | recruiter screen (live, added 2026-08-31) |
 | Concourse Tech, Forward Deployed Engineer | 92 | recruiter outreach — inbound; posting states "US citizen (required for government work)" and the recruiter confirmed directly that it does not apply (live, added 2026-08-31) |
+| Zingage, Forward Deployed Engineer | 85 | **the pipeline's first reply** — cold email 2026-08-31, the co-founder/CTO answered the same morning (live, added 2026-08-31) |
 | Tenex Labs, Forward Deployed Engineer | 90 | recruiter conversations — **three independent inbound reach-outs** (Tenex in-house, talentpluto, and a third agency recruiter) (live, added 2026-08-31) |
 | company-n, Forward Deployed Engineer | 88 | full loop, 3-hour NYC onsite |
 | Beacon Software, Forward Deployed Engineer | 88 | recruiter screen — inbound, recruiter reached out (live, added 2026-08-31) |
 | company-o, Full-Stack SWE (deployed) | 87 | live — technical round scheduled |
 | company-p, Forward Deployed Engineer | 85 | recruiter screen |
 | Flagler Health, Forward Deployed Engineer | 85 | intro call — inbound message 2026-08-27, awaiting next step (live, added 2026-08-31) |
+| Kubera Health, Founding Engineer | 82 | cold email 2026-08-31, CEO replied same day and introduced him to the engineering lead (live, added 2026-08-31) |
 | company-q, Software Engineer (fintech) | 58 | first round, then rejected |
 | company-r, SWE II (finance) | 70† | full loop, rejected at the end |
 | company-s, Python Dev (staffing) | 8 | recruiter screen only |
@@ -394,7 +396,7 @@ hard eligibility fact the gate does not currently screen for at all
 titles). Worth a note, not a fix forced by one data point: see "What's
 explicitly not considered" below.
 
-Caveats: n=12 (7 concluded-or-deep, 5 live added 2026-08-31); the set is
+Caveats: n=14 (7 concluded-or-deep, 7 live added 2026-08-31); the set is
 survivorship-biased toward roles he chose to apply to (Beacon, Tenex,
 and Flagler, as pure inbound, are the exceptions); interview outcomes
 reflect more than role fit. The InOrbit/Beacon/Tenex scores were judged
