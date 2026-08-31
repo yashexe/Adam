@@ -287,23 +287,39 @@ posting text where it exists:
 | Role | Judge | Process reached |
 |---|--:|---|
 | company-m, Forward Deployed Engineer | 92 | interviewed (via Paraform) |
+| InOrbit.AI, Forward Deployed Engineer | 92 | recruiter screen (live, added 2026-08-31) |
 | company-n, Forward Deployed Engineer | 88 | full loop, 3-hour NYC onsite |
+| Beacon Software, Forward Deployed Engineer | 88 | recruiter screen — inbound, recruiter reached out (live, added 2026-08-31) |
 | company-o, Full-Stack SWE (deployed) | 87 | live — technical round scheduled |
 | company-p, Forward Deployed Engineer | 85 | recruiter screen |
 | company-q, Software Engineer (fintech) | 58 | first round, then rejected |
 | company-r, SWE II (finance) | 55 | full loop, rejected at the end |
 | company-s, Python Dev (staffing) | 8 | recruiter screen only |
 
-Score order matches process-depth order seven for seven. The four roles
-the judge rates strong (85–92) are the ones that pursued him — all four
-are forward-deployed/embedded-engineer shapes, the same shape that now
-tops the pipeline's ranking. The two it rates below the 65 line are the
-two that rejected him. company-n is the instructive case: its posting demands
-3+ years customer-facing (a hard miss on paper at 1.2 years), but the
-judge scored the substance — NetSuite/SAP/Salesforce ERP integration work
-in Python — and the market agreed, running him through a full onsite. That
-is the judge weighing substance over stated years, the exact inverse of
-the deterministic dimensions' Staff-inflation failure above.
+On the original seven, score order matched process-depth order seven for
+seven (the 2026-08-31 rows are live, early-stage processes — no depth to
+order yet). The roles the judge rates strong (85–92) are the ones that
+pursue him — all six are forward-deployed/embedded-engineer shapes, the
+same shape that tops the pipeline's ranking, and Beacon is the strongest
+kind of confirmation available: a recruiter reached out *to him* for a
+posting the judge independently scores 88. The two rated below the 65
+line are the two that rejected him. company-n is the instructive case: its
+posting demands 3+ years customer-facing (a hard miss on paper at 1.2
+years), but the judge scored the substance — NetSuite/SAP/Salesforce ERP
+integration work in Python — and the market agreed, running him through a
+full onsite. That is the judge weighing substance over stated years, the
+exact inverse of the deterministic dimensions' Staff-inflation failure
+above.
+
+InOrbit (2026-08-31) adds a new wrinkle to the visa rule: its posting
+states no sponsorship "including H-1B, OPT/CPT, TN" — the first observed
+posting that names TN as excluded, which is precisely the route the
+narrow `check_citizenship_required` rule exists to protect (the rule's
+rationale is that companies saying "no sponsorship" usually don't mean
+TN). Under the current rule this posting stays eligible, and the market
+data cuts both ways: the stated policy would exclude him, yet the process
+reached a recruiter screen anyway. Left as a flag, not a rule change —
+one posting, and screens evidently happen despite stated policies.
 
 company-p's posting states no visa sponsorship, now or in the future — a
 hard eligibility fact the gate does not currently screen for at all
@@ -311,9 +327,12 @@ hard eligibility fact the gate does not currently screen for at all
 titles). Worth a note, not a fix forced by one data point: see "What's
 explicitly not considered" below.
 
-Caveats: n=7; the set is survivorship-biased toward roles he chose to
-apply to; interview outcomes reflect more than role fit. These scores were
-not written to the pipeline's cache — they are not tracker postings.
+Caveats: n=9 (7 concluded-or-deep, 2 live screens added 2026-08-31); the
+set is survivorship-biased toward roles he chose to apply to (Beacon, as
+pure inbound, is the one exception); interview outcomes reflect more than
+role fit. These scores were not written to the pipeline's cache — they
+are not tracker postings. The 2026-08-31 pair was judged with the
+standard anchors riding in the batch, all three in-band (91/52/3).
 
 ## The judge was never wired into a live run (found and fixed 2026-08-25)
 
