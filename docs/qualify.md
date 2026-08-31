@@ -297,7 +297,7 @@ posting text where it exists:
 | company-o, Full-Stack SWE (deployed) | 87 | live — technical round scheduled |
 | company-p, Forward Deployed Engineer | 85 | recruiter screen |
 | Flagler Health, Forward Deployed Engineer | 85 | intro call — inbound message 2026-08-27, awaiting next step (live, added 2026-08-31) |
-| Kubera Health, Founding Engineer | 82 | cold email 2026-08-31, CEO replied same day and introduced him to the engineering lead (live, added 2026-08-31) |
+| Kubera Health, Founding Engineer | 82 | **the pipeline's first end-to-end conversion.** Cold email 10:34 → CEO replied 12:31 introducing the engineering lead → 30-minute meeting booked 13:50, same day (live, added 2026-08-31) |
 | company-q, Software Engineer (fintech) | 58 | first round, then rejected |
 | company-r, SWE II (finance) | 70† | full loop, rejected at the end |
 | company-s, Python Dev (staffing) | 8 | recruiter screen only |
