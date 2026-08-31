@@ -293,6 +293,7 @@ posting text where it exists:
 | Beacon Software, Forward Deployed Engineer | 88 | recruiter screen — inbound, recruiter reached out (live, added 2026-08-31) |
 | company-o, Full-Stack SWE (deployed) | 87 | live — technical round scheduled |
 | company-p, Forward Deployed Engineer | 85 | recruiter screen |
+| Flagler Health, Forward Deployed Engineer | 85 | intro call — inbound message 2026-08-27, awaiting next step (live, added 2026-08-31) |
 | company-q, Software Engineer (fintech) | 58 | first round, then rejected |
 | company-r, SWE II (finance) | 55 | full loop, rejected at the end |
 | company-s, Python Dev (staffing) | 8 | recruiter screen only |
@@ -341,13 +342,21 @@ hard eligibility fact the gate does not currently screen for at all
 titles). Worth a note, not a fix forced by one data point: see "What's
 explicitly not considered" below.
 
-Caveats: n=10 (7 concluded-or-deep, 3 live added 2026-08-31); the set is
-survivorship-biased toward roles he chose to apply to (Beacon and Tenex,
-as pure inbound, are the exceptions); interview outcomes reflect more
-than role fit. These scores were not written to the pipeline's cache —
-they are not tracker postings. The 2026-08-31 rows were judged with the
-standard anchors riding in each batch, all in-band both times
-(91/52/3 and 92/52/4).
+Caveats: n=11 (7 concluded-or-deep, 4 live added 2026-08-31); the set is
+survivorship-biased toward roles he chose to apply to (Beacon, Tenex,
+and Flagler, as pure inbound, are the exceptions); interview outcomes
+reflect more than role fit. The InOrbit/Beacon/Tenex scores were judged
+ad hoc with the standard anchors riding in each batch, all in-band both
+times (91/52/3 and 92/52/4), and were not written to the pipeline's
+cache. Flagler is different in kind: a tracker posting the pipeline had
+**already judged 85 in its live cache** before the process existed —
+the first ground-truth row whose score predates its outcome, i.e. a
+genuine prospective prediction rather than a retrodiction. He never
+applied; they messaged him. Flagler is also now closed in
+`outreach_log` (`in_process_inbound_2026-08-27`), because the contact
+happened off-email — LinkedIn message and a call — which the Gmail
+prior-contact check cannot see, so without the store row a future drain
+could have cold-emailed a company he is mid-process with.
 
 ## The judge was never wired into a live run (found and fixed 2026-08-25)
 
