@@ -78,9 +78,10 @@ for the full derivation):
   draws this boundary — 65-84 is "a real fit with some distance", 40-64
   is "adjacent... not one where his specific background is an advantage",
   and an adjacent posting is not worth a cold email whose premise is a
-  specific story. Both ground-truth rejections (company-q 58, company-r 55)
-  sit below this line; all four postings that pursued him sit far above
-  it (85-92).
+  specific story. Both ground-truth rejections sit at or below 70
+  (company-q 58; company-r 55 as originally scored on partial text, 70 on the
+  full-text re-judge of 2026-08-31); every posting that pursued him sits
+  at 85-92.
 
 Every earlier tier value (Instaply's inherited 85/65, the 2026-08-24
 re-tune to 72/65, the 2026-08-26-morning re-derivation to 69/64) lived on
@@ -295,8 +296,13 @@ posting text where it exists:
 | company-p, Forward Deployed Engineer | 85 | recruiter screen |
 | Flagler Health, Forward Deployed Engineer | 85 | intro call — inbound message 2026-08-27, awaiting next step (live, added 2026-08-31) |
 | company-q, Software Engineer (fintech) | 58 | first round, then rejected |
-| company-r, SWE II (finance) | 55 | full loop, rejected at the end |
+| company-r, SWE II (finance) | 70† | full loop, rejected at the end |
 | company-s, Python Dev (staffing) | 8 | recruiter screen only |
+
+† Re-judged 2026-08-31 on the complete posting text (supplied by Yash,
+with the exact resume that application used); the original 55 was scored
+on partial reconstructed text. Anchors rode the re-judge batch, all
+in-band (93/42/4). Shape: core-engineering.
 
 On the original seven, score order matched process-depth order seven for
 seven (the 2026-08-31 rows are live, early-stage processes — no depth to
@@ -317,8 +323,23 @@ the outreach half has recorded its first reply. The rest split between
 Paraform (company-m) and inbound recruiters (Beacon, Tenex);
 channel-of-origin is now worth tracking on every future process, since
 "which channel produces interviews" is the number the whole pipeline
-exists to move. The two rated below the 65
-line are the two that rejected him. company-n is the instructive case: its
+exists to move.
+
+The company-r re-judge (55→70 on full text) redraws the failure band in an
+informative way: the 59–84 band is no longer empty — its one data point
+is a core-engineering 70 that produced a **full interview loop and no
+offer**. That is exactly what the judge's own scale predicts for "a real
+fit with some distance": interviews happen, conversion doesn't. The
+depth-ordering claim weakens accordingly (a 70 went deeper than an
+85-scored screen), but the conversion ordering sharpens: every process
+at 85+ pursued him and none rejected him; both concluded processes at
+≤70 ended in rejection, and both were core-engineering-shaped. One era
+caveat cuts across the concluded rows: company-q/company-r were run on the
+February resume ("Software Engineer", mechanism-dense bullets, no
+client-facing story), while the entire 85+ live wave arrived on the
+overhauled August resume — outcome differences between the bands carry
+both the score gap and the positioning gap. company-n is the instructive
+case: its
 posting demands 3+ years customer-facing (a hard miss on paper at 1.2
 years), but the judge scored the substance — NetSuite/SAP/Salesforce ERP
 integration work in Python — and the market agreed, running him through a
