@@ -304,7 +304,19 @@ pursue him — all seven are forward-deployed/embedded-engineer shapes, the
 same shape that tops the pipeline's ranking. The inbound rows are the
 strongest kind of confirmation available: recruiters reached out *to him*
 for postings the judge independently scores 88 and 90 — Tenex three
-separate times, from three unrelated sources, in the same week. The two rated below the 65
+separate times, from three unrelated sources, in the same week.
+
+Two provenance facts, per Yash 2026-08-31. **Recency:** of the seven
+85+ processes, all but company-n started within the past month (and all but
+company-r within two) — the pursuit band is accelerating, not
+historical residue. **Channel:** company-n and company-p were sourced by
+ashby-ny-tracker itself — the discovery half of this system has already
+produced two real interview processes, including a full onsite, before
+the outreach half has recorded its first reply. The rest split between
+Paraform (company-m) and inbound recruiters (Beacon, Tenex);
+channel-of-origin is now worth tracking on every future process, since
+"which channel produces interviews" is the number the whole pipeline
+exists to move. The two rated below the 65
 line are the two that rejected him. company-n is the instructive case: its
 posting demands 3+ years customer-facing (a hard miss on paper at 1.2
 years), but the judge scored the substance — NetSuite/SAP/Salesforce ERP
