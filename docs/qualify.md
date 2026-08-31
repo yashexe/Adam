@@ -371,11 +371,12 @@ Two separate findings sit inside that:
    Concourse's phrasing ("US citizen (required for government work)")
    matches none of them, so the posting passed eligibility by accident
    rather than by design.
-2. **Closing that gap would have been the wrong outcome.** Had the
-   detector caught it, a live 92-scored FDE process with confirmed
-   recruiter interest would have been silently discarded before any human
-   saw it — precisely the failure mode the project's no-exclude-filters
-   rule exists to prevent.
+2. **Closing that gap would have been the wrong outcome.** Note the
+   posting arrived via recruiter outreach, not through the tracker, so
+   nothing was actually discarded — this is a test result, not an
+   incident. But a *tracker* posting worded this way and caught by a
+   widened detector would be silently dropped before any human saw it,
+   and clera (92) is the case where that really happened.
 
 The stated-restriction record now reads: three postings carrying
 citizenship or visa restrictions, two of which produced real processes
