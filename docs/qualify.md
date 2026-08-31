@@ -288,6 +288,7 @@ posting text where it exists:
 |---|--:|---|
 | company-m, Forward Deployed Engineer | 92 | interviewed (via Paraform) |
 | InOrbit.AI, Forward Deployed Engineer | 92 | recruiter screen (live, added 2026-08-31) |
+| Tenex Labs, Forward Deployed Engineer | 90 | recruiter conversations — **three independent inbound reach-outs** (Tenex in-house, talentpluto, and a third agency recruiter) (live, added 2026-08-31) |
 | company-n, Forward Deployed Engineer | 88 | full loop, 3-hour NYC onsite |
 | Beacon Software, Forward Deployed Engineer | 88 | recruiter screen — inbound, recruiter reached out (live, added 2026-08-31) |
 | company-o, Full-Stack SWE (deployed) | 87 | live — technical round scheduled |
@@ -299,10 +300,11 @@ posting text where it exists:
 On the original seven, score order matched process-depth order seven for
 seven (the 2026-08-31 rows are live, early-stage processes — no depth to
 order yet). The roles the judge rates strong (85–92) are the ones that
-pursue him — all six are forward-deployed/embedded-engineer shapes, the
-same shape that tops the pipeline's ranking, and Beacon is the strongest
-kind of confirmation available: a recruiter reached out *to him* for a
-posting the judge independently scores 88. The two rated below the 65
+pursue him — all seven are forward-deployed/embedded-engineer shapes, the
+same shape that tops the pipeline's ranking. The inbound rows are the
+strongest kind of confirmation available: recruiters reached out *to him*
+for postings the judge independently scores 88 and 90 — Tenex three
+separate times, from three unrelated sources, in the same week. The two rated below the 65
 line are the two that rejected him. company-n is the instructive case: its
 posting demands 3+ years customer-facing (a hard miss on paper at 1.2
 years), but the judge scored the substance — NetSuite/SAP/Salesforce ERP
@@ -327,12 +329,13 @@ hard eligibility fact the gate does not currently screen for at all
 titles). Worth a note, not a fix forced by one data point: see "What's
 explicitly not considered" below.
 
-Caveats: n=9 (7 concluded-or-deep, 2 live screens added 2026-08-31); the
-set is survivorship-biased toward roles he chose to apply to (Beacon, as
-pure inbound, is the one exception); interview outcomes reflect more than
-role fit. These scores were not written to the pipeline's cache — they
-are not tracker postings. The 2026-08-31 pair was judged with the
-standard anchors riding in the batch, all three in-band (91/52/3).
+Caveats: n=10 (7 concluded-or-deep, 3 live added 2026-08-31); the set is
+survivorship-biased toward roles he chose to apply to (Beacon and Tenex,
+as pure inbound, are the exceptions); interview outcomes reflect more
+than role fit. These scores were not written to the pipeline's cache —
+they are not tracker postings. The 2026-08-31 rows were judged with the
+standard anchors riding in each batch, all in-band both times
+(91/52/3 and 92/52/4).
 
 ## The judge was never wired into a live run (found and fixed 2026-08-25)
 
