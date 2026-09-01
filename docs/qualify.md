@@ -78,10 +78,12 @@ for the full derivation):
   draws this boundary — 65-84 is "a real fit with some distance", 40-64
   is "adjacent... not one where his specific background is an advantage",
   and an adjacent posting is not worth a cold email whose premise is a
-  specific story. Both ground-truth rejections sit at or below 70
+  specific story. Every posting that produced a real conversation sits
+  at 82-92; the two lowest-scored processes both ended in rejection
   (company-q 58; company-r 55 as originally scored on partial text, 70 on the
-  full-text re-judge of 2026-08-31); every posting that pursued him sits
-  at 85-92.
+  full-text re-judge of 2026-08-31). A third rejection landed at 85 on
+  2026-08-31, so the bar predicts *whether a conversation happens*, not
+  whether it converts.
 
 Every earlier tier value (Instaply's inherited 85/65, the 2026-08-24
 re-tune to 72/65, the 2026-08-26-morning re-derivation to 69/64) lived on
@@ -295,7 +297,7 @@ posting text where it exists:
 | company-n, Forward Deployed Engineer | 88 | full loop, 3-hour NYC onsite |
 | Beacon Software, Forward Deployed Engineer | 88 | recruiter screen — inbound, recruiter reached out (live, added 2026-08-31) |
 | company-o, Full-Stack SWE (deployed) | 87 | live — technical round scheduled |
-| company-p, Forward Deployed Engineer | 85 | recruiter screen |
+| company-p, Forward Deployed Engineer | 85 | screen + two team conversations, **rejected 2026-08-31** — the first rejection from the 85+ band |
 | Flagler Health, Forward Deployed Engineer | 85 | intro call — inbound message 2026-08-27, awaiting next step (live, added 2026-08-31) |
 | Kubera Health, Founding Engineer | 82 | **the pipeline's first end-to-end conversion.** Cold email 10:34 → CEO replied 12:31 introducing the engineering lead → 30-minute meeting booked 13:50, same day (live, added 2026-08-31) |
 | company-q, Software Engineer (fintech) | 58 | first round, then rejected |
@@ -310,11 +312,21 @@ in-band (93/42/4). Shape: core-engineering.
 On the original seven, score order matched process-depth order seven for
 seven (the 2026-08-31 rows are live, early-stage processes — no depth to
 order yet). The roles the judge rates strong (85–92) are the ones that
-pursue him — all seven are forward-deployed/embedded-engineer shapes, the
-same shape that tops the pipeline's ranking. The inbound rows are the
+*engage* him — all seven are forward-deployed/embedded-engineer shapes,
+the same shape that tops the pipeline's ranking. The inbound rows are the
 strongest kind of confirmation available: recruiters reached out *to him*
 for postings the judge independently scores 88 and 90 — Tenex three
 separate times, from three unrelated sources, in the same week.
+
+**The 85+ band took its first rejection on 2026-08-31** (company-p, 85 —
+screen plus two team conversations, then declined). Until then every
+concluded process at 85+ had either pursued him or was still live, and
+that claim appeared throughout this file. It is now retired: what the
+band predicts is *engagement*, not outcome. Every 85+ posting has
+produced a real conversation and every ≤70 one that concluded produced a
+rejection, but conversion inside the strong band is a separate question
+the sample cannot yet answer — three of the four concluded processes in
+the whole set are now rejections, at 85, 70, and 58.
 
 Two provenance facts, per Yash 2026-08-31. **Recency:** of the seven
 85+ processes, all but company-n started within the past month (and all but
