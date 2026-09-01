@@ -321,12 +321,25 @@ separate times, from three unrelated sources, in the same week.
 **The 85+ band took its first rejection on 2026-08-31** (company-p, 85 —
 screen plus two team conversations, then declined). Until then every
 concluded process at 85+ had either pursued him or was still live, and
-that claim appeared throughout this file. It is now retired: what the
-band predicts is *engagement*, not outcome. Every 85+ posting has
-produced a real conversation and every ≤70 one that concluded produced a
-rejection, but conversion inside the strong band is a separate question
-the sample cannot yet answer — three of the four concluded processes in
-the whole set are now rejections, at 85, 70, and 58.
+that claim appeared throughout this file.
+
+The right correction is narrower than "the band is weaker than we
+thought," per Yash 2026-08-31: **offer conversion is not what this gate
+is accountable for.** The judge answers "is this a job worth being
+contacted about," and its measurable output is whether a real
+conversation happens. What happens inside the room is interview
+performance, comp alignment, who else they were talking to, and timing —
+none of which a posting's text predicts and none of which the score
+claims to. Every 85+ posting has produced a real conversation; both
+concluded processes at ≤70 were rejections. That is the claim the data
+supports and the claim the gate should be judged on.
+
+The one place the gate *is* implicated in a late-stage loss: if it
+scores a posting strong whose real bar is a discipline he doesn't have,
+the mismatch surfaces as a failed interview rather than as a missing
+reply. Databricks (judged 40, 2026-09-01) is the counter-example of the
+gate working — an FDE-titled role whose actual requirements were
+production data science, caught before any spend.
 
 Two provenance facts, per Yash 2026-08-31. **Recency:** of the seven
 85+ processes, all but company-n started within the past month (and all but
