@@ -1,0 +1,87 @@
+#!/bin/sh
+# Block commits that would publish live-process identities.
+#
+# The repo is public and deliberately aliases companies (company-m,
+# company-af, ...) in every tracked doc. The real names live only in
+# gitignored files (PROCESSES.md, PROFILE.md, outreach.db) and in Notion.
+# This hook is the mechanical backstop for that convention, checking both
+# staged content and the commit message.
+#
+# The patterns live in .githooks/sensitive-patterns, which is GITIGNORED
+# ON PURPOSE: a blocklist of company names committed to a public repo
+# leaks exactly what it exists to protect. This script is generic and safe
+# to publish; the list is not. (The first version inlined the names and
+# correctly blocked its own commit.)
+#
+# Install once:  git config core.hooksPath .githooks
+# Bypass once:   git commit --no-verify
+#
+# sensitive-patterns: one extended-regex per line under a [names],
+# [people], or [allow-email] header. Blank lines and # comments ignored.
+# [allow-email] entries are addresses that ARE safe to publish.
+
+PATTERNS="$(dirname "$0")/sensitive-patterns"
+
+if [ ! -f "$PATTERNS" ]; then
+  echo "WARNING: $PATTERNS missing — identity guard is OFF for this commit."
+  echo "Recreate it (gitignored, one regex per line) to re-enable."
+  exit 0
+fi
+
+section() {
+  awk -v want="[$1]" '
+    /^\[/   { cur = $0; next }
+    /^[[:space:]]*(#|$)/ { next }
+    cur == want { print }
+  ' "$PATTERNS" | paste -sd'|' -
+}
+
+NAMES=$(section names)
+PEOPLE=$(section people)
+ALLOW=$(section allow-email)
+[ -z "$ALLOW" ] && ALLOW='__never_matches__'
+
+fail=0
+report() {
+  [ -z "$2" ] && return 0
+  echo "BLOCKED: $1"
+  printf '%s\n' "$2" | cut -c1-160 | sed 's/^/  /'
+  fail=1
+}
+
+# 1. Staged content — added lines only.
+staged=$(git diff --cached --diff-filter=ACM -U0 | grep '^+' | grep -v '^+++')
+
+if [ -n "$NAMES" ]; then
+  report "staged content names a live-process company." \
+    "$(printf '%s\n' "$staged" | grep -inE "$NAMES" | head -5)"
+fi
+if [ -n "$PEOPLE" ]; then
+  report "staged content names a real outreach contact." \
+    "$(printf '%s\n' "$staged" | grep -inE "$PEOPLE" | head -5)"
+fi
+report "staged content contains a third-party email address." \
+  "$(printf '%s\n' "$staged" \
+     | grep -oE '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}' \
+     | grep -viE "$ALLOW" | head -5)"
+
+# 2. The commit message is published too.
+msg_file="$1"
+if [ -n "$msg_file" ] && [ -f "$msg_file" ]; then
+  pat=""
+  [ -n "$NAMES" ] && pat="$NAMES"
+  [ -n "$PEOPLE" ] && pat="${pat:+$pat|}$PEOPLE"
+  if [ -n "$pat" ]; then
+    report "the commit message names a live company or contact." \
+      "$(grep -inE "$pat" "$msg_file" | head -5)"
+  fi
+fi
+
+if [ "$fail" -eq 1 ]; then
+  echo
+  echo "Use an alias (company-m, company-af, ...) as the tracked docs do,"
+  echo "or keep the detail in a gitignored file / Notion."
+  echo "Deliberate exception: git commit --no-verify"
+  exit 1
+fi
+exit 0
