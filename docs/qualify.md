@@ -290,16 +290,16 @@ posting text where it exists:
 | Role | Judge | Process reached |
 |---|--:|---|
 | company-m, Forward Deployed Engineer | 92 | interviewed (via Paraform) |
-| InOrbit.AI, Forward Deployed Engineer | 92 | recruiter screen (live, added 2026-08-31) |
-| Concourse Tech, Forward Deployed Engineer | 92 | recruiter outreach — inbound; posting states "US citizen (required for government work)" and the recruiter confirmed directly that it does not apply (live, added 2026-08-31) |
-| Zingage, Forward Deployed Engineer | 85 | **the pipeline's first reply** — cold email 2026-08-31, the co-founder/CTO answered the same morning (live, added 2026-08-31) |
-| Tenex Labs, Forward Deployed Engineer | 90 | recruiter conversations — **three independent inbound reach-outs** (Tenex in-house, talentpluto, and a third agency recruiter) (live, added 2026-08-31) |
+| company-af, Forward Deployed Engineer | 92 | recruiter screen (live, added 2026-08-31) |
+| company-ag, Forward Deployed Engineer | 92 | recruiter outreach — inbound; posting states "US citizen (required for government work)" and the recruiter confirmed directly that it does not apply (live, added 2026-08-31) |
+| company-ak, Forward Deployed Engineer | 85 | **the pipeline's first reply** — cold email 2026-08-31, the co-founder/CTO answered the same morning (live, added 2026-08-31) |
+| company-ah, Forward Deployed Engineer | 90 | recruiter conversations — **three independent inbound reach-outs** (company-ah in-house and two unrelated agency recruiters) (live, added 2026-08-31) |
 | company-n, Forward Deployed Engineer | 88 | full loop, 3-hour NYC onsite |
-| Beacon Software, Forward Deployed Engineer | 88 | recruiter screen — inbound, recruiter reached out (live, added 2026-08-31) |
+| company-aj, Forward Deployed Engineer | 88 | recruiter screen — inbound, recruiter reached out (live, added 2026-08-31) |
 | company-o, Full-Stack SWE (deployed) | 87 | live — technical round done, awaiting the next (as of 2026-09-02) |
 | company-p, Forward Deployed Engineer | 85 | screen + two team conversations, **rejected 2026-08-31** — the first rejection from the 85+ band |
-| Flagler Health, Forward Deployed Engineer | 85 | intro call — inbound message 2026-08-27, awaiting next step (live, added 2026-08-31) |
-| Kubera Health, Founding Engineer | 82 | **the pipeline's first end-to-end conversion.** Cold email 10:34 → CEO replied 12:31 introducing the engineering lead → 30-minute meeting booked 13:50, same day (live, added 2026-08-31) |
+| company-al, Forward Deployed Engineer | 85 | intro call — inbound message 2026-08-27, awaiting next step (live, added 2026-08-31) |
+| company-am, Founding Engineer | 82 | **the pipeline's first end-to-end conversion.** Cold email 10:34 → CEO replied 12:31 introducing the engineering lead → 30-minute meeting booked 13:50, same day (live, added 2026-08-31) |
 | company-q, Software Engineer (fintech) | 58 | first round, then rejected |
 | company-r, SWE II (finance) | 70† | full loop, rejected at the end |
 | company-s, Python Dev (staffing) | 8 | recruiter screen only |
@@ -315,7 +315,7 @@ order yet). The roles the judge rates strong (85–92) are the ones that
 *engage* him — all seven are forward-deployed/embedded-engineer shapes,
 the same shape that tops the pipeline's ranking. The inbound rows are the
 strongest kind of confirmation available: recruiters reached out *to him*
-for postings the judge independently scores 88 and 90 — Tenex three
+for postings the judge independently scores 88 and 90 — company-ah three
 separate times, from three unrelated sources, in the same week.
 
 **The 85+ band took its first rejection on 2026-08-31** (company-p, 85 —
@@ -337,7 +337,7 @@ supports and the claim the gate should be judged on.
 The one place the gate *is* implicated in a late-stage loss: if it
 scores a posting strong whose real bar is a discipline he doesn't have,
 the mismatch surfaces as a failed interview rather than as a missing
-reply. Databricks (judged 40, 2026-09-01) is the counter-example of the
+reply. company-an (judged 40, 2026-09-01) is the counter-example of the
 gate working — an FDE-titled role whose actual requirements were
 production data science, caught before any spend.
 
@@ -348,7 +348,7 @@ historical residue. **Channel:** company-n and company-p were sourced by
 ashby-ny-tracker itself — the discovery half of this system has already
 produced two real interview processes, including a full onsite, before
 the outreach half has recorded its first reply. The rest split between
-Paraform (company-m) and inbound recruiters (Beacon, Tenex);
+Paraform (company-m) and inbound recruiters (company-aj, company-ah);
 channel-of-origin is now worth tracking on every future process, since
 "which channel produces interviews" is the number the whole pipeline
 exists to move.
@@ -375,7 +375,7 @@ full onsite. That is the judge weighing substance over stated years, the
 exact inverse of the deterministic dimensions' Staff-inflation failure
 above.
 
-InOrbit (2026-08-31) adds a new wrinkle to the visa rule: its posting
+company-af (2026-08-31) adds a new wrinkle to the visa rule: its posting
 states no sponsorship "including H-1B, OPT/CPT, TN" — the first observed
 posting that names TN as excluded, which is precisely the route the
 narrow `check_citizenship_required` rule exists to protect (the rule's
@@ -385,7 +385,7 @@ data cuts both ways: the stated policy would exclude him, yet the process
 reached a recruiter screen anyway. Left as a flag, not a rule change —
 one posting, and screens evidently happen despite stated policies.
 
-**Concourse (2026-08-31) turns that flag into a real problem with the
+**company-ag (2026-08-31) turns that flag into a real problem with the
 rule.** Its posting states "US citizen (required for government work)" —
 unambiguously the fact `check_citizenship_required` exists to catch — and
 a recruiter reached out anyway, and when asked directly said the
@@ -395,7 +395,7 @@ Two separate findings sit inside that:
 
 1. **The detector has a phrasing gap.** `qualify/extractor.py` matches
    "citizenship required", "must be a us citizen", and "us citizens only".
-   Concourse's phrasing ("US citizen (required for government work)")
+   company-ag's phrasing ("US citizen (required for government work)")
    matches none of them, so the posting passed eligibility by accident
    rather than by design.
 2. **Closing that gap would have been the wrong outcome.** Note the
@@ -407,7 +407,7 @@ Two separate findings sit inside that:
 
 The stated-restriction record now reads: three postings carrying
 citizenship or visa restrictions, two of which produced real processes
-(InOrbit screen, Concourse inbound with the requirement explicitly
+(company-af screen, company-ag inbound with the requirement explicitly
 waived) and one of which (clera) was hard-excluded before any human
 judgment. The rule was built on Yash's instruction that "if they ask US
 citizenship theres no point moving forward," which remains his call — but
@@ -422,16 +422,16 @@ titles). Worth a note, not a fix forced by one data point: see "What's
 explicitly not considered" below.
 
 Caveats: n=14 (7 concluded-or-deep, 7 live added 2026-08-31); the set is
-survivorship-biased toward roles he chose to apply to (Beacon, Tenex,
-and Flagler, as pure inbound, are the exceptions); interview outcomes
-reflect more than role fit. The InOrbit/Beacon/Tenex scores were judged
+survivorship-biased toward roles he chose to apply to (company-aj, company-ah,
+and company-al, as pure inbound, are the exceptions); interview outcomes
+reflect more than role fit. The company-af/company-aj/company-ah scores were judged
 ad hoc with the standard anchors riding in each batch, all in-band both
 times (91/52/3 and 92/52/4), and were not written to the pipeline's
-cache. Flagler is different in kind: a tracker posting the pipeline had
+cache. company-al is different in kind: a tracker posting the pipeline had
 **already judged 85 in its live cache** before the process existed —
 the first ground-truth row whose score predates its outcome, i.e. a
 genuine prospective prediction rather than a retrodiction. He never
-applied; they messaged him. Flagler is also now closed in
+applied; they messaged him. company-al is also now closed in
 `outreach_log` (`in_process_inbound_2026-08-27`), because the contact
 happened off-email — LinkedIn message and a call — which the Gmail
 prior-contact check cannot see, so without the store row a future drain

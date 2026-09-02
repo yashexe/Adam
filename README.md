@@ -165,6 +165,9 @@ data (`outreach_run.py`, per-component state in
 
 ---
 
-*Company names in this README are aliased (`company-a`, `company-m`,
+*Company names throughout this repo are aliased (`company-a`, `company-m`,
 `company-af`, …). The postings, interview processes, and verification
-results are real; the private parties aren't named here.*
+results are real; the private parties aren't named in a public repo. Four
+files the docs refer to are deliberately absent: `PROFILE.md`,
+`CALL_NOTES.md`, `PROCESSES.md`, and `DECISION_JOURNAL.md` hold personal
+background, employer detail, and live process notes, and stay local.*
