@@ -217,10 +217,21 @@ def create_reply_draft(*, to: str, body: str) -> str:
 
         # The raw header may arrive RFC2047-encoded; prefixing "Re: " onto
         # the encoded form would render as literal =?UTF-8?...?= garbage.
+        #
+        # It may also arrive *folded*: RFC 5322 wraps headers past ~78
+        # characters onto continuation lines, so a long subject comes back
+        # with an embedded newline that .strip() (outer whitespace only)
+        # leaves in place. Assigning that to msg["Subject"] raises
+        # "Header values may not contain linefeed or carriage return".
+        # Unfolding collapses every internal whitespace run to one space,
+        # which is exactly what a reader sees anyway. Hit live on a
+        # 70-character subject; a 57-character one in the same run was
+        # short enough not to fold, which is why this survived until now.
         raw_subject = (original["Subject"] or "").strip()
         original_subject = (
             str(make_header(decode_header(raw_subject))) if raw_subject else ""
         )
+        original_subject = " ".join(original_subject.split())
         message_id = (original["Message-ID"] or "").strip()
 
         subject = original_subject
