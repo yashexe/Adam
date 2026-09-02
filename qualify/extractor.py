@@ -37,6 +37,24 @@ EMPTY_RESULT: dict = {
     "disqualifying_constraints": [],
 }
 
+# Only an explicit citizenship / permanent-residency requirement fires this;
+# "no sponsorship" alone never does (see the comment at the use site). The
+# green-card alternation matters: "US citizens / green-card holders only"
+# rules out TN status exactly as hard as "US citizens only" does, and on
+# 2026-09-02 a recruiter-sent posting phrased it that way slipped past the
+# three fixed phrases this used to be.
+_CITIZEN = r"us citizens?"
+_PERMANENT_RESIDENT = r"(?:green[- ]?card holders?|permanent residents?)"
+_CITIZENSHIP_RE = re.compile(
+    "|".join((
+        r"citizenship (?:is )?required",
+        rf"must be an? (?:{_CITIZEN}|{_PERMANENT_RESIDENT})",
+        rf"{_CITIZEN}(?:\s*(?:/|or|and)\s*{_PERMANENT_RESIDENT})?\s+only",
+        rf"{_PERMANENT_RESIDENT}\s*(?:/|or|and)\s*{_CITIZEN}\s+only",
+    ))
+)
+
+
 def heuristic_extract_requirements(job_text: str) -> dict:
     """Extract a useful baseline without an LLM."""
     text = job_text.lower()
@@ -104,11 +122,12 @@ def heuristic_extract_requirements(job_text: str) -> dict:
     # Postings write the nationality as "US", "U.S.", or "U.S" -- normalize
     # before matching (a company-e FDE posting's "Must be a U.S. citizen"
     # slipped past the plain "us" spelling on 2026-08-28).
+    # Collapse whitespace too: PDF and board extractions break lines mid
+    # phrase ("... — US\ncitizens / green-card holders only"), and a rule
+    # that only sees one line of a two-line sentence is not a rule.
     citizenship_text = re.sub(r"\bu\.s\.?(?=\s)", "us", text)
-    if any(
-        phrase in citizenship_text
-        for phrase in ("citizenship required", "must be a us citizen", "us citizens only")
-    ):
+    citizenship_text = re.sub(r"\s+", " ", citizenship_text)
+    if _CITIZENSHIP_RE.search(citizenship_text):
         result["citizenship_required"] = True
 
     result["role_family"] = infer_role_family(job_text)
