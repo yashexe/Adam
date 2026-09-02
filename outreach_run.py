@@ -9,6 +9,8 @@ Outreach pipeline CLI — the deterministic half.
     python3 outreach_run.py bumps                   # who is eligible for the one follow-up
     python3 outreach_run.py bump <company>           # draft that follow-up (body on stdin)
     python3 outreach_run.py discard <company>        # draft got deleted in Gmail, release the claim
+    python3 outreach_run.py verifiers                # which verification providers can answer right now
+    python3 outreach_run.py verify <email>           # one address through the chain (smoke-test a new key)
 
 Stages 3 and 5 are agent calls and are not driven from here — the
 `outreach` skill runs them between `prepare` and `finalize`. Nothing in
@@ -33,6 +35,7 @@ from outreach.pipeline import (
     record_reply_findings,
     resolve_candidate_slate,
 )
+from outreach.verify import provider_status, verify_email
 from qualify.semantic import build_batch, save_scores, unjudged
 
 # Cap on postings per judge invocation — see cmd_judge.
@@ -340,6 +343,36 @@ def cmd_discard(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_verifiers(args: argparse.Namespace) -> int:
+    """Which providers in the verification chain can answer right now, and
+    what each has left. Run it before a drain and right after adding a
+    key — a chain where nothing is ready lands every draft `unverified`."""
+    rows = provider_status()
+    if args.json:
+        print(json.dumps(rows, indent=2))
+        return 0
+    print("\nverification providers, in chain order\n")
+    for r in rows:
+        print(f"  {'ready' if r['ready'] else '  off'}  {r['provider']:<16} {r['detail']}")
+    print()
+    return 0
+
+
+def cmd_verify(args: argparse.Namespace) -> int:
+    """One address through the provider chain. The smoke test for a newly
+    added key, and the way to see exactly why an address came back
+    `unverified`. Spends a credit only if the SMTP probe cannot answer."""
+    result = verify_email(args.email, use_cache=not args.fresh)
+    print(json.dumps({
+        "email": result.email,
+        "label": result.label,
+        "score": result.score,
+        "reason": result.reason,
+        "blocks_draft": result.should_block,
+    }, indent=2))
+    return 2 if result.should_block else 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -383,6 +416,15 @@ def main() -> int:
 
     r = sub.add_parser("replies", help="check Gmail for replies and record them")
     r.set_defaults(func=cmd_replies)
+
+    v = sub.add_parser("verifiers", help="which verification providers can answer right now")
+    v.add_argument("--json", action="store_true")
+    v.set_defaults(func=cmd_verifiers)
+
+    ve = sub.add_parser("verify", help="run one address through the verification chain")
+    ve.add_argument("email")
+    ve.add_argument("--fresh", action="store_true", help="ignore a cached answer")
+    ve.set_defaults(func=cmd_verify)
 
     args = parser.parse_args()
     return args.func(args)

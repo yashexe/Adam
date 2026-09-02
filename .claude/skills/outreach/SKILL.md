@@ -288,14 +288,23 @@ information.
 - Agent 1 runs 50–80k tokens and 15–30 tool calls per company.
 - Hunter: one domain-search per company (cached per domain, shared by
   verify-slate and finalize). Since 2026-08-29 that roster lookup is the
-  only thing Hunter's free credits are reserved for — mailbox probes walk
-  a provider chain first (ZeroBounce, MillionVerifier, each active when
-  its key is in `.env`; Hunter last), so a company typically costs 1
-  Hunter credit plus 1–2 probes at whichever provider has quota.
-  verify-slate stops spending at the first deliverable candidate, and
-  finalize's re-verification of the chosen address is a cache hit. If
-  every provider is exhausted, drafts land labeled `unverified` — say so
-  plainly in the report rather than treating it as verified.
+  only thing Hunter's free credits are reserved for — mailbox checks walk
+  a provider chain instead: a direct SMTP probe from this Mac first
+  (keyless and free; since 2026-09-02 it settles about half of all
+  addresses outright), then ZeroBounce and MillionVerifier (each active
+  when its key is in `.env`), Hunter last. A company whose domain
+  rejects unknown recipients costs 1 Hunter credit (the roster) and
+  nothing else. On a catch-all domain — about a third of them, skewed
+  to larger companies — the probe's verdict is provisional and Hunter
+  still spends one verification credit to sharpen it, because its
+  sources and bounce history can say what no live probe can; the
+  free-tier vendors are skipped there since they cannot. verify-slate
+  stops spending at the first deliverable candidate, and finalize's
+  re-verification of the chosen address is a cache hit.
+  `python3 outreach_run.py verifiers` shows which providers can answer
+  right now — run it before a drain. If nothing can answer, drafts land
+  labeled `unverified` — say so plainly in the report rather than
+  treating it as verified.
 
 Both are per-company, which is why dedup claims a company on first attempt
 rather than re-researching it for every new posting.

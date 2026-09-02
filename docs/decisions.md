@@ -384,3 +384,53 @@ delegated to `draft_lint.py`, which already enforces them; the drafter
 moved from Sonnet to Opus, free on the subscription. Prompt history
 ("this section used to say...") moved out of the live prompt into this
 log and `docs/agents.md`.
+
+---
+
+**Mailbox verification probes the domain's own mail server first; Hunter
+sharpens what a probe cannot settle.** *(2026-09-02)*
+*Why:* Hunter's month ran out on 2026-08-28, mostly on mailbox probes;
+the free-tier vendor adapters added 2026-08-29 sat idle behind signups
+that had not happened; every draft since landed `unverified`. The probe
+every vendor sells is a plain SMTP handshake — connect to the domain's
+MX, MAIL FROM the null sender, RCPT TO the address, quit before DATA —
+and port 25 turned out to be open from this Mac to Google's servers,
+which host 26 of the 29 domains this pipeline has ever verified.
+Benchmarked against all 40 addresses Hunter had labeled: 21 identical
+verdicts, 16 where the probe could only say catch-all, 3 skips
+(Microsoft 365 and Proofpoint refuse or drop residential connections),
+1 contradiction (a mailbox Hunter had called dead accepts mail today).
+The 16 shaped the design: 12 domains, skewed to larger companies, accept
+any local part from here — regardless of sender or which Google MX host
+answers — while Hunter's raw response claims a definite SMTP check on
+the same domains and had a valid/invalid verdict for 15 of the 16.
+Five of those "valid" addresses have since been emailed for real (one
+on 08-28, four on 08-31) and Gmail holds no bounce for any of them. So
+on a catch-all domain Hunter knows something a live probe cannot, and
+on every other domain the probe knows as much as Hunter for free.
+*Alternatives:* more free-tier vendors (deferred — each is another
+signup, and on a catch-all domain a vendor's probe only repeats ours);
+a paid tier (rejected — Yash's explicit call); Hunter first, as before
+(rejected — measured to burn a month in one run); treating the probe's
+catch-all as final (rejected — throws away Hunter's better verdict on a
+third of addresses); moving the probe to the Pi (moot — same home
+connection, and the Mac already reaches Google's MX in under a second).
+*Consequence:* `_verify_via_smtp` at the front of `_VERIFY_PROVIDERS`.
+A catch-all verdict is provisional: the chain continues only through
+providers flagged as able to sharpen it (Hunter), skips the ones that
+cannot, and falls back to the catch-all if nobody can. Inconclusive
+answers — a vendor "unknown", greylisting, any 4xx, a refusal aimed at
+the sender or IP rather than the mailbox — are skips passed down the
+chain and never cached; until now a vendor "unknown" was cached as
+`risky` forever. ZeroBounce and MillionVerifier adapters corrected
+against their live API shapes (MillionVerifier's documented demo keys
+answer without an account, so that adapter is exercised; ZeroBounce's
+sandbox needs a key). `outreach_run.py verifiers` shows what can answer
+right now; `verify <email>` runs one address through the chain and is
+the smoke test for a new key. The probe rides IPv6 — the ISP blocks
+port 25 over IPv4 — so losing IPv6 turns every probe into a skip and
+the chain falls through to the vendors; nothing breaks, it just costs
+credits again. Cost: a company on a domain that rejects
+unknown recipients now costs one Hunter credit (the roster) and no
+probe; a catch-all domain still costs one probe credit; the free tiers,
+when their keys exist, cover what is left.

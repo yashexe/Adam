@@ -16,11 +16,14 @@ Two distinct jobs live here, split across vendors on purpose since
   and the `_name_conflict` identity guard, and no free alternative with
   comparable small-company coverage exists. Hunter's free credits are
   reserved for this: ~1 cached credit per company.
-- **Mailbox probing** is a commodity and walks `_VERIFY_PROVIDERS` —
-  free-tier providers first (ZeroBounce, MillionVerifier; each activates
-  when its key is in `.env`), Hunter last. One 12-company drain run
-  (2026-08-28) consumed a whole Hunter month mostly on probes; this split
-  is what lets the free tiers cover a real monthly volume.
+- **Mailbox probing** is a commodity and walks `_VERIFY_PROVIDERS` — a
+  direct SMTP probe from this Mac first (keyless and free; benchmarked
+  2026-09-02 against Hunter's own labels it settles about half of all
+  addresses outright and calls most of the rest catch-all, a provisional
+  verdict Hunter then gets a turn to sharpen), then free-tier vendors
+  (ZeroBounce, MillionVerifier; each activates when its key is in
+  `.env`), Hunter last. One 12-company drain run (2026-08-28) consumed a
+  whole Hunter month mostly on probes; this split roughly halves that.
 
 Nothing here raises into the pipeline. An unreachable API, a missing key,
 or an exhausted quota all degrade to `UNVERIFIED`, which is honest and lets
@@ -39,6 +42,12 @@ from __future__ import annotations
 
 import json
 import os
+import re
+import secrets
+import smtplib
+import socket
+import ssl
+import subprocess
 import time
 import urllib.error
 import urllib.parse
@@ -151,21 +160,182 @@ def _label_from(data: dict) -> tuple[str, str]:
 # Mailbox probing is a commodity; the domain roster is not. Hunter's free
 # credits are therefore reserved for what only Hunter provides here
 # (domain-search: pattern + per-address names, see confirm_pattern), and
-# plain verification walks this chain instead — free-tier providers first,
-# Hunter last. Each adapter activates only when its key is in .env, returns
-# a VerificationResult on an answer, or a string saying why it must be
-# skipped (no key, quota gone, API error) so the next provider gets a turn.
-# Every provider normalizes onto the same five labels; `should_block`
-# semantics are identical regardless of who answered. Added 2026-08-29,
-# after one 12-company drain run consumed the entire Hunter month.
+# plain verification walks this chain instead: the direct SMTP probe, then
+# free-tier vendors, Hunter last. Each adapter returns a VerificationResult
+# on a conclusive answer, or a string saying why it must be skipped (no
+# key, quota gone, API error, could not conclude) so the next provider
+# gets a turn. Every provider normalizes onto the same five labels;
+# `should_block` semantics are identical regardless of who answered.
 #
-# Adapters are written from each provider's documented v2/v3 API shape but
-# land untested until a real key exists — smoke-test with one known-good
-# address when a key is first added, and expect the defensive UNVERIFIED
-# path on any surprise rather than a crash.
+# Inconclusive is a skip, not a label. A vendor's "unknown" usually means
+# its probe was greylisted or timed out from *its* network — exactly the
+# case a second opinion from a different vantage point resolves, and
+# exactly the answer that must never be cached as if it were a fact. Only
+# conclusive answers reach the cache. (Until 2026-09-02 an "unknown" was
+# cached as RISKY forever.)
+#
+# The chain dates from 2026-08-29, after one 12-company drain run consumed
+# the entire Hunter month. The SMTP probe went in front on 2026-09-02, when
+# it turned out port 25 is open from this Mac to Google's MX and 26 of the
+# 29 domains this pipeline had ever verified are hosted there. Benchmarked
+# the same day against all 40 addresses Hunter had labeled: 21 identical
+# verdicts, 16 where the probe could only say catch-all (12 domains that
+# accept any local part from here — Hunter had a definite answer for 15),
+# 3 skips (two Microsoft-hosted domains that refuse residential
+# connections, one Proofpoint), and one outright contradiction where the
+# mailbox Hunter had called dead now accepts mail.
+
+_SMTP_TIMEOUT = 8
+_ENHANCED_CODE = re.compile(r"\b([245])\.(\d{1,3})\.(\d{1,3})\b")
+
+# RFC 3463 enhanced codes that are the server's verdict on the *mailbox*.
+# Everything else a server can say is about this sender, this IP, or this
+# moment, and is a skip rather than a label.
+_NO_SUCH_MAILBOX = frozenset({
+    "5.1.0", "5.1.1", "5.1.2", "5.1.3", "5.1.6", "5.1.10",
+    "5.4.1",  # Microsoft's directory-based edge block for unknown recipients
+    "5.2.1",  # mailbox exists but is disabled — mail to it bounces all the same
+})
+_MAILBOX_FULL = frozenset({"5.2.2"})
+
+
+def _mx_hosts(domain: str) -> tuple[list[str], str]:
+    """Lowest-preference-first MX hosts, or ([], why-not).
+
+    Uses `dig` (on every Mac) because the stdlib has no MX lookup. A
+    failed lookup is a skip, never a verdict: a DNS hiccup must not become
+    INVALID and block a draft.
+    """
+    try:
+        proc = subprocess.run(
+            ["dig", "+short", "+time=3", "+tries=1", "MX", domain],
+            capture_output=True, text=True, timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return [], f"MX lookup failed ({type(exc).__name__})"
+    if proc.returncode != 0:
+        return [], f"MX lookup failed (dig exit {proc.returncode})"
+    pairs = []
+    for line in proc.stdout.splitlines():
+        parts = line.split()
+        if len(parts) == 2 and parts[0].isdigit():
+            pairs.append((int(parts[0]), parts[1].rstrip(".").lower()))
+    if not pairs:
+        return [], "no MX record"
+    return [host for _, host in sorted(pairs)], ""
+
+
+def _smtp_reply(message: bytes) -> tuple[str, str]:
+    """(enhanced status code or '', one-line reply text)."""
+    text = " ".join(message.decode("utf-8", "replace").split())
+    match = _ENHANCED_CODE.search(text)
+    return (".".join(match.groups()) if match else ""), text
+
+
+def _verify_via_smtp(email: str) -> VerificationResult | str:
+    """Ask the domain's own mail server whether the mailbox exists.
+
+    The same RCPT TO handshake every verification vendor sells, done from
+    here: connect to the lowest-preference MX on port 25, EHLO, STARTTLS
+    when offered, MAIL FROM the null sender, RCPT TO the address, then
+    RCPT TO a random local part so a domain that says yes to everything is
+    labeled CATCH_ALL rather than VERIFIED. No message is ever sent — the
+    session ends before DATA. A handful of probes a day from a home
+    connection is far below anything Google rate-limits, and the actual
+    emails go out through Gmail's servers, so this IP's reputation is
+    never what a recipient sees.
+
+    Only the server's verdict on the mailbox becomes a label. A refusal
+    aimed at this sender or IP (5.7.x policy), a temporary code
+    (greylisting, any 4xx), an unreachable MX, or a missing MX all return
+    a skip string, so a vendor with a better vantage point gets the next
+    turn.
+
+    Measured 2026-09-02 from this Mac: the ISP blocks outbound port 25
+    over IPv4, so every probe rides IPv6 — Google's MX answers in under a
+    second there, and if IPv6 ever goes away every probe becomes a skip
+    after the connect timeout and the chain falls through to the vendors.
+    Microsoft 365 is intermittent over IPv6: the same MX alternates
+    between a real verdict and a 5.7.1 refusal of the client host, and
+    both are handled — verdict when given, skip otherwise.
+    """
+    domain = email.rsplit("@", 1)[-1].lower()
+    hosts, why = _mx_hosts(domain)
+    if not hosts:
+        return f"smtp: {why} for {domain}"
+    host = hosts[0]
+    raw: dict = {"mx": host}
+    try:
+        server = smtplib.SMTP(
+            host, 25, timeout=_SMTP_TIMEOUT,
+            local_hostname=socket.gethostname() or "adam.local",
+        )
+    except (OSError, smtplib.SMTPException) as exc:
+        return f"smtp: cannot reach {host}:25 ({type(exc).__name__}: {exc})"
+    try:
+        if server.ehlo()[0] != 250:
+            server.helo()
+        if server.has_extn("starttls"):
+            # Being a well-behaved client, not securing a payload: there is
+            # no message. MX certificates are routinely issued for a name
+            # other than the MX host, so verification would only add a
+            # failure mode to a probe that carries nothing.
+            context = ssl.create_default_context()
+            context.check_hostname = False
+            context.verify_mode = ssl.CERT_NONE
+            server.starttls(context=context)
+            server.ehlo()
+        code, msg = server.mail("")
+        if code != 250:
+            return f"smtp: {host} refused the null sender ({code} {_smtp_reply(msg)[1][:80]})"
+        code, msg = server.rcpt(email)
+        enhanced, text = _smtp_reply(msg)
+        raw.update({"code": code, "enhanced": enhanced, "message": text[:200]})
+        if code in (250, 251):
+            probe = f"{secrets.token_hex(6)}.zq@{domain}"
+            pcode, _ = server.rcpt(probe)
+            raw["catch_all_probe"] = pcode
+            if pcode in (250, 251):
+                return VerificationResult(
+                    email=email, label=CATCH_ALL,
+                    reason="domain accepts all mail; mailbox unconfirmable", raw=raw,
+                )
+            return VerificationResult(
+                email=email, label=VERIFIED,
+                reason=f"SMTP-confirmed deliverable by {host}", raw=raw,
+            )
+        if enhanced in _NO_SUCH_MAILBOX:
+            return VerificationResult(
+                email=email, label=INVALID,
+                reason=f"{host} reports no such mailbox ({code} {enhanced})", raw=raw,
+            )
+        if enhanced in _MAILBOX_FULL:
+            return VerificationResult(
+                email=email, label=RISKY,
+                reason=f"{host} reports the mailbox is full ({code} {enhanced})", raw=raw,
+            )
+        kind = "temporary refusal" if 400 <= code < 500 else "refused without a mailbox verdict"
+        return f"smtp: {host} {kind} ({code} {enhanced} {text[:80]})"
+    except (OSError, smtplib.SMTPException) as exc:
+        return f"smtp: session with {host} failed ({type(exc).__name__}: {exc})"
+    finally:
+        try:
+            server.quit()
+        except Exception:
+            pass
+
 
 def _verify_via_zerobounce(email: str) -> VerificationResult | str:
-    """https://api.zerobounce.net/v2/validate — free tier ~100/month."""
+    """https://api.zerobounce.net/v2/validate — free tier ~100/month.
+
+    Checked against the v2 docs 2026-09-02: params `api_key` and `email`;
+    statuses valid / invalid / catch-all / unknown / spamtrap / abuse /
+    do_not_mail, with detail in `sub_status`; failures put text in an
+    `error` field ("Invalid API Key or your account ran out of credits").
+    Zero-cost smoke test once a key exists: the sandbox local parts
+    valid, invalid, catch-all and unknown at the example.com domain return
+    canned results without spending a credit.
+    """
     load_dotenv(ENV_PATH)
     key = os.getenv("ZEROBOUNCE_API_KEY")
     if not key:
@@ -177,43 +347,63 @@ def _verify_via_zerobounce(email: str) -> VerificationResult | str:
     if payload.get("error"):
         return f"zerobounce: {payload['error']}"
     status = (payload.get("status") or "").lower()
-    label, reason = {
+    sub = (payload.get("sub_status") or "").lower()
+    if status == "unknown":
+        return f"zerobounce: could not conclude ({sub or 'no detail'})"
+    known = {
         "valid": (VERIFIED, "SMTP-confirmed deliverable"),
-        "invalid": (INVALID, "ZeroBounce reports invalid"),
+        "invalid": (INVALID, f"ZeroBounce reports invalid ({sub or 'no detail'})"),
         "catch-all": (CATCH_ALL, "domain accepts all mail; mailbox unconfirmable"),
         # A spamtrap is a real, deliverable mailbox that exists to burn
         # sender reputation — blocking is the only sane response.
         "spamtrap": (INVALID, "ZeroBounce flags a spamtrap"),
         "abuse": (RISKY, "ZeroBounce flags an abuse-prone address"),
-        "do_not_mail": (RISKY, "ZeroBounce reports do_not_mail"),
-        "unknown": (RISKY, "ZeroBounce could not conclude"),
-    }.get(status, (UNVERIFIED, f"unrecognized ZeroBounce status ({status or 'empty'})"))
-    return VerificationResult(email=email, label=label, score=None,
-                              reason=reason, raw=payload)
+        "do_not_mail": (
+            INVALID if sub in ("disposable", "toxic") else RISKY,
+            f"ZeroBounce reports do_not_mail ({sub or 'no detail'})",
+        ),
+    }
+    if status not in known:
+        return f"zerobounce: unrecognized status ({status or 'empty'})"
+    label, reason = known[status]
+    return VerificationResult(email=email, label=label, reason=reason, raw=payload)
 
 
 def _verify_via_millionverifier(email: str) -> VerificationResult | str:
-    """https://api.millionverifier.com/api/v3 — pay-as-you-go with free credits."""
+    """https://api.millionverifier.com/api/v3 — pay-as-you-go with free credits.
+
+    Checked live against the documented demo keys 2026-09-02 (the API
+    answers API_KEY_FOR_OK, API_KEY_FOR_INVALID, ... with canned
+    responses and no account): params `api`, `email`, `timeout`; results
+    ok / invalid / disposable / catch_all / unknown / unverified / error,
+    detail in `subresult`; failures put text in `error` ("Apikey not
+    found", "Insufficient credits", "IP address blocked"). Those demo keys
+    are also the zero-cost smoke test for this adapter.
+    """
     load_dotenv(ENV_PATH)
     key = os.getenv("MILLIONVERIFIER_API_KEY")
     if not key:
         return "millionverifier: no MILLIONVERIFIER_API_KEY"
     payload, error = _get("https://api.millionverifier.com/api/v3/",
-                          {"api": key, "email": email})
+                          {"api": key, "email": email, "timeout": 15})
     if payload is None:
         return f"millionverifier: {error}"
     if payload.get("error"):
         return f"millionverifier: {payload['error']}"
     result = (payload.get("result") or "").lower()
-    label, reason = {
+    sub = (payload.get("subresult") or "").lower()
+    if result in ("unknown", "unverified", "error", ""):
+        return f"millionverifier: could not conclude ({result or 'empty'}/{sub or 'no detail'})"
+    known = {
         "ok": (VERIFIED, "SMTP-confirmed deliverable"),
-        "invalid": (INVALID, "MillionVerifier reports invalid"),
+        "invalid": (INVALID, f"MillionVerifier reports invalid ({sub or 'no detail'})"),
         "disposable": (INVALID, "disposable address domain"),
         "catch_all": (CATCH_ALL, "domain accepts all mail; mailbox unconfirmable"),
-        "unknown": (RISKY, "MillionVerifier could not conclude"),
-    }.get(result, (UNVERIFIED, f"unrecognized MillionVerifier result ({result or 'empty'})"))
-    return VerificationResult(email=email, label=label, score=None,
-                              reason=reason, raw=payload)
+    }
+    if result not in known:
+        return f"millionverifier: unrecognized result ({result})"
+    label, reason = known[result]
+    return VerificationResult(email=email, label=label, reason=reason, raw=payload)
 
 
 def _verify_via_hunter(email: str) -> VerificationResult | str:
@@ -224,24 +414,57 @@ def _verify_via_hunter(email: str) -> VerificationResult | str:
     if payload is None:
         return f"hunter: {error}"
     data = payload.get("data") or {}
+    if (data.get("status") or "").lower() == "unknown":
+        return "hunter: could not conclude"
     label, reason = _label_from(data)
     return VerificationResult(email=email, label=label,
                               score=data.get("score"), reason=reason, raw=data)
 
 
+# (name, adapter, can it improve on a CATCH_ALL verdict from earlier in the
+# chain). A live probe — ours or a vendor's — cannot tell one mailbox from
+# another on a domain that accepts everything, so a catch-all verdict is
+# held as *provisional* and the chain continues only through providers
+# that bring more than a probe. Hunter does: its verdict draws on its
+# address sources and bounce history, and on 2026-09-02's benchmark it
+# returned a definite valid/invalid for 15 of the 16 addresses this
+# probe could only call catch-all. Providers that cannot improve on it
+# are skipped rather than spending a credit to repeat it. If nobody can
+# sharpen it, the provisional catch-all stands, cached — it is a real
+# fact about the domain, not an inconclusive answer.
 _VERIFY_PROVIDERS = (
-    ("zerobounce", _verify_via_zerobounce),
-    ("millionverifier", _verify_via_millionverifier),
-    ("hunter", _verify_via_hunter),
+    ("smtp", _verify_via_smtp, False),
+    ("zerobounce", _verify_via_zerobounce, False),
+    ("millionverifier", _verify_via_millionverifier, False),
+    ("hunter", _verify_via_hunter, True),
 )
+
+
+def _settle(cache: dict, email: str, name: str, outcome: VerificationResult,
+            skips: list[str]) -> VerificationResult:
+    """Cache a conclusive answer and stamp it with who gave it."""
+    reason = outcome.reason if name == "hunter" else f"{outcome.reason} (via {name})"
+    if skips:
+        reason += "; " + "; ".join(skips)
+    cache[email] = {
+        "label": outcome.label,
+        "score": outcome.score,
+        "reason": reason,
+        "provider": name,
+        "raw": outcome.raw,
+    }
+    _save_cache(cache)
+    outcome.reason = reason
+    return outcome
 
 
 def verify_email(email: str, *, use_cache: bool = True) -> VerificationResult:
     """Check one address via the first provider able to answer.
 
-    Spends one credit at whichever provider answers, unless cached. With no
-    alternate keys configured this behaves exactly as the Hunter-only
-    version did.
+    The SMTP probe answers for free wherever it can; a credit is spent only
+    at whichever vendor answers after it, and only conclusive answers are
+    cached. The terminal UNVERIFIED carries every provider's reason for
+    passing, so "why is this unverified" is always answerable.
     """
     cache = _load_cache()
     if use_cache and email in cache:
@@ -255,23 +478,23 @@ def verify_email(email: str, *, use_cache: bool = True) -> VerificationResult:
         )
 
     skips: list[str] = []
-    for name, provider in _VERIFY_PROVIDERS:
+    provisional: tuple[str, VerificationResult] | None = None
+    for index, (name, provider, sharpens_catch_all) in enumerate(_VERIFY_PROVIDERS):
+        if provisional and not sharpens_catch_all:
+            continue  # a second probe of a catch-all domain buys nothing
         outcome = provider(email)
         if isinstance(outcome, str):
             skips.append(outcome)
             continue
-        reason = outcome.reason if name == "hunter" else f"{outcome.reason} (via {name})"
-        cache[email] = {
-            "label": outcome.label,
-            "score": outcome.score,
-            "reason": reason,
-            "provider": name,
-            "raw": outcome.raw,
-        }
-        _save_cache(cache)
-        outcome.reason = reason
-        return outcome
+        later_can_sharpen = any(s for _, _, s in _VERIFY_PROVIDERS[index + 1:])
+        if outcome.label == CATCH_ALL and provisional is None and later_can_sharpen:
+            provisional = (name, outcome)
+            continue
+        return _settle(cache, email, name, outcome, [])
 
+    if provisional:
+        name, outcome = provisional
+        return _settle(cache, email, name, outcome, skips)
     return VerificationResult(
         email=email, label=UNVERIFIED,
         reason="no provider could answer: " + "; ".join(skips),
@@ -337,6 +560,59 @@ def confirm_pattern(
     return pattern, note, emails
 
 
+def provider_status() -> list[dict]:
+    """One row per provider in chain order: can it answer right now, and
+    what does it have left. Backs `outreach_run.py verifiers`, the thing to
+    run before a drain and right after adding a key."""
+    rows: list[dict] = []
+    try:
+        with socket.create_connection(("aspmx.l.google.com", 25), timeout=5) as sock:
+            family = "IPv6" if sock.family == socket.AF_INET6 else "IPv4"
+        rows.append({"provider": "smtp", "ready": True,
+                     "detail": f"port 25 open to Google's MX over {family}; "
+                               "free, no key, no quota"})
+    except OSError as exc:
+        rows.append({"provider": "smtp", "ready": False,
+                     "detail": f"port 25 blocked from this network ({type(exc).__name__})"})
+
+    load_dotenv(ENV_PATH)
+    key = os.getenv("ZEROBOUNCE_API_KEY")
+    if not key:
+        rows.append({"provider": "zerobounce", "ready": False,
+                     "detail": "no ZEROBOUNCE_API_KEY in .env (free tier ~100/month)"})
+    else:
+        payload, error = _get("https://api.zerobounce.net/v2/getcredits", {"api_key": key})
+        credits = str((payload or {}).get("Credits", "")) if payload else ""
+        if payload is None:
+            rows.append({"provider": "zerobounce", "ready": False, "detail": error})
+        elif credits in ("", "-1"):
+            rows.append({"provider": "zerobounce", "ready": False, "detail": "key rejected"})
+        else:
+            rows.append({"provider": "zerobounce", "ready": credits != "0",
+                         "detail": f"{credits} credits left"})
+
+    key = os.getenv("MILLIONVERIFIER_API_KEY")
+    if not key:
+        rows.append({"provider": "millionverifier", "ready": False,
+                     "detail": "no MILLIONVERIFIER_API_KEY in .env (free signup credits)"})
+    else:
+        payload, error = _get("https://api.millionverifier.com/api/v3/credits", {"api": key})
+        if payload is None:
+            rows.append({"provider": "millionverifier", "ready": False, "detail": error})
+        elif payload.get("error"):
+            rows.append({"provider": "millionverifier", "ready": False,
+                         "detail": str(payload["error"])})
+        else:
+            credits = payload.get("credits")
+            rows.append({"provider": "millionverifier", "ready": bool(credits),
+                         "detail": f"{credits} credits left"})
+
+    available, note = credits_remaining()
+    rows.append({"provider": "hunter", "ready": bool(available),
+                 "detail": note + " (reserved for the domain roster)"})
+    return rows
+
+
 def credits_remaining() -> tuple[int | None, str]:
     """Free tier is 50/month; worth checking before a batch run."""
     key = _api_key()
@@ -351,7 +627,9 @@ def credits_remaining() -> tuple[int | None, str]:
     verifications = requests.get("verifications") or {}
     available = verifications.get("available", searches.get("available"))
     used = verifications.get("used", searches.get("used"))
-    return available, f"used {used} of {available}" if available is not None else "unknown"
+    if available is None:
+        return None, "unknown"
+    return max(available - (used or 0), 0), f"used {used} of {available}"
 
 
 # ── Address resolution ─────────────────────────────────────────────────────

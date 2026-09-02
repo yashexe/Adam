@@ -29,7 +29,8 @@ in the loop, which ashby-ny-tracker deliberately has none of.
                            score (which IS the score) — docs/qualify.md
 [3] Find contact  AGENT  Agent 1, ranked slate of up to 3 — docs/agents.md
 [3.5] Pick     det./human  verify-slate resolves reachability; human picks
-[4] Verify     det.      Hunter.io email verification, live — outreach/verify.py
+[4] Verify     det.      mailbox check: keyless SMTP probe first, free-tier
+                        vendors, Hunter last — outreach/verify.py
 [5] Draft      AGENT     Agent 2 — docs/agents.md
 [6] Approve    human    review/edit in Gmail — the one gate that can't be
                         automated away

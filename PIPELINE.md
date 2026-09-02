@@ -75,7 +75,14 @@ to decide on its own.
     finding out after the drafting spend. Then finalize re-resolves and
     verifies whichever candidate was chosen — the advisory pass never
     binds (outreach/verify.py). Produces a confidence label, cached per
-    address. Agent 2 gets only the label and the address — never raw
+    address. The mailbox check itself is a provider chain: a direct SMTP
+    RCPT probe from this Mac first — keyless and free; since 2026-09-02
+    it settles about half of all addresses outright — then free-tier
+    vendors as their keys exist, Hunter last. A catch-all verdict from a
+    probe is provisional: Hunter, whose verdict draws on sources and
+    bounce history rather than a live probe alone, gets a turn to sharpen
+    it. An inconclusive answer passes to the next provider and is never
+    cached. Agent 2 gets only the label and the address — never raw
     lookup data it doesn't need, with one deliberate window: Agent 1's
     `personalization_context`, a digest of public company facts the draft
     builds its bridge and its "something about them" line from (widened

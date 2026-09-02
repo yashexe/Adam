@@ -240,7 +240,10 @@ Three facts drove the numbers:
 Practical yield at these cutoffs, on the sample week: ~6 strong companies
 and ~5 worth-a-look per 7 days. If the human approves mainly strong-tier
 contacts, that is roughly 26 companies/month at 2–3 Hunter credits each —
-inside the 100/month tier, which the old bar's ~47/month was not.
+inside the 100/month tier, which the old bar's ~47/month was not. (Since
+2026-09-02 the mailbox check itself is a free SMTP probe for most domains
+and a company costs about 1 Hunter credit, the roster lookup — see
+`outreach/verify.py`.)
 
 Derived from one 56-posting week; validated the same day against a second
 sample — see below.
