@@ -778,3 +778,47 @@ Anything not in the dimension table above — this gate does not currently
 weigh company stage/funding recency, interview-process length, or
 anything Paraform's richer data captures (deferred, see
 `docs/decisions.md`).
+
+
+## Profile sensitivity, measured (2026-09-02)
+
+`PROFILE.md` was re-aligned with the 08-28 résumé (new impact figures,
+Kubernetes in the stack, "intern" wording for the Feb–May 2025 stint, and
+the agentic outreach pipeline added as a story gated to agentic roles).
+Since the judge reads that file, 22 already-judged postings from the
+3-day window — stratified 12 / 8 / 6 / 4 across the score bands — were
+re-judged blind with the anchors in the batch, and compared with their
+cached scores.
+
+| | |
+|---|---|
+| Pearson r, old vs new | +0.95 |
+| Spearman ρ | +0.97 (the test-retest baseline above) |
+| Within the ±7 jitter band | 14 of 22 |
+| Anchors | 90 / 48 / 4, in band |
+| Everything scored ≥ 76 before | unchanged or +2 to +7 |
+
+The eight that moved beyond jitter were not noise; they were two
+readings of the new profile:
+
+- **Seniority, downward on junior titles.** Three roles titled New Grad,
+  Junior, or Associate fell 17–24 points (74→50, 72→55, 30→22), with a
+  fourth new-grad role at 58→45. The judge's new reasons say it outright:
+  "scoped for 0–1 year new grads, below the level his founding-engineer
+  ownership already operates at." The profile now claims more (a $700K+
+  impact line, a 15–25-hour-per-deployment figure, Kubernetes), and the
+  judge started treating junior-scoped roles as beneath him. A PHP/Vue
+  full-stack role also fell 70→48 on the same stack mismatch it had noted
+  before at a lower weight. Three of these crossed the 65 bar.
+- **Domain, upward on evals.** A Member of Technical Staff (Evals &
+  Post-Training) posting rose 25→45, the only large gain, because the
+  pipeline story now documents LLM-as-judge, frozen anchors, and
+  ground-truth evaluation. Still adjacent, correctly.
+
+Open question, not yet decided: whether junior-titled roles *should*
+lose points for being scoped below him. Nothing in the judge's contract
+asks for that — it penalizes bars he cannot reach, not bars beneath him —
+and at 1.2 years post-grad those roles are legitimately in play (one of
+the three was a live target that week). If they should stay in range, a
+one-line addition to the judge prompt fixes it. The cache keeps the
+pre-change scores; nothing here was saved.
