@@ -23,6 +23,7 @@ from __future__ import annotations
 import email
 import email.utils
 import imaplib
+import re
 import os
 import time
 from email.header import decode_header, make_header
@@ -38,10 +39,30 @@ from outreach.verify import VerificationResult
 # did not copy that .env. Reading it in place beats a second copy of a
 # secret on disk.
 ENV_PATH = Path("/Users/yashbhavsar/Code/job_search_automation/.env")
-RESUME_PATH = (
-    Path(__file__).resolve().parent.parent
-    / "harvest/from_job_search_automation/Yash_Bhavsar_Resume_08192026.pdf"
-)
+RESUME_DIR = Path(__file__).resolve().parent.parent / "harvest/from_job_search_automation"
+_RESUME_GLOB = "Yash_Bhavsar_Resume_*.pdf"
+
+
+def _resume_stamp(path: Path) -> tuple[str, str, str]:
+    """(year, month, day) from the MMDDYYYY stamp Yash puts in the filename;
+    a file without one sorts oldest."""
+    match = re.search(r"_(\d{2})(\d{2})(\d{4})\.pdf$", path.name)
+    return (match.group(3), match.group(1), match.group(2)) if match else ("0000", "00", "00")
+
+
+def resume_path() -> Path:
+    """The newest résumé in RESUME_DIR, by the date stamp in its name.
+
+    Drop the new file in the folder and every draft from then on carries
+    it; nothing else to edit. Until 2026-09-02 this was a hardcoded
+    filename, and drafts kept attaching a superseded résumé until Yash
+    noticed and swapped the file by hand in Gmail as he sent each one.
+    The folder is gitignored for PDFs: the résumé is personal data.
+    """
+    candidates = sorted(RESUME_DIR.glob(_RESUME_GLOB), key=_resume_stamp)
+    if not candidates:
+        raise FileNotFoundError(f"no {_RESUME_GLOB} in {RESUME_DIR}")
+    return candidates[-1]
 
 IMAP_HOST = "imap.gmail.com"
 DRAFTS_MAILBOX = '"[Gmail]/Drafts"'
@@ -103,13 +124,12 @@ def _build_message(
     )
 
     if attach_resume:
-        if not RESUME_PATH.exists():
-            raise FileNotFoundError(f"resume not found at {RESUME_PATH}")
+        resume = resume_path()
         msg.add_attachment(
-            RESUME_PATH.read_bytes(),
+            resume.read_bytes(),
             maintype="application",
             subtype="pdf",
-            filename=RESUME_PATH.name,
+            filename=resume.name,
         )
     return msg
 

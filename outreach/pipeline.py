@@ -30,7 +30,7 @@ from qualify.semantic import cached_score
 
 from outreach import store
 from outreach.draft_lint import lint, lint_linkedin
-from outreach.gmail_draft import create_draft, create_reply_draft
+from outreach.gmail_draft import create_draft, create_reply_draft, resume_path
 from outreach.history import prior_contacts
 from outreach.verify import DEFERRED, resolve_address, resolve_slate, verify_email
 
@@ -495,5 +495,6 @@ def finalize(
     )
     return FinalizeResult(
         slug, email, verification.label, True,
-        f"drafted to {email} ({verification.label}, score {verification.score})",
+        f"drafted to {email} ({verification.label}, score {verification.score}), "
+        f"résumé {resume_path().name}",
     )

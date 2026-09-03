@@ -9,7 +9,8 @@ outreach.db
 harvest/from_paraform_pipeline/ny_roles_mds/
 harvest/from_paraform_pipeline/*.csv
 PROFILE.md
-harvest/from_job_search_automation/Yash_Bhavsar_Resume_08192026.pdf
+# the résumé is personal data and must never reach the public repo
+harvest/from_job_search_automation/*.pdf
 PROCESSES.md
 CALL_NOTES.md
 DECISION_JOURNAL.md

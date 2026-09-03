@@ -15,7 +15,7 @@ Status vocabulary used below: **ported** (used close to unchanged),
 |---|---|---|---|
 | `send_cold_email.py` | SMTP send + resume attachment | **ported** — the one deterministic piece reused close to unchanged, becomes stage 7 | hardcoded single `target_email`/`html_content` per run; needs generalizing to take a draft from `pending_outreach` |
 | `README.md` | Drafting rules (brief, founder-focused, infra metrics, no AI-tool mentions) + "resume shift" positioning | **adapted** — becomes Agent 2's prompt basis, see `docs/agents.md` | written as instructions to a human/agent doing this manually per-company; needs reshaping into a system prompt |
-| `Yash_Bhavsar_Resume_08192026.pdf` | Current resume | **ported**, kept current | replaced 2026-08-22 (was `_07082026`); `send_cold_email.py`'s hardcoded path updated to match |
+| `Yash_Bhavsar_Resume_08282026.pdf` | Current resume | **ported**, kept current | replaced 2026-09-02 (was `_08192026`, before that `_07082026`); the 08-25/08-28 rewrite leads with client-facing and deployment-ownership work. `outreach/gmail_draft.py`'s `RESUME_PATH` is the one place the attachment is chosen |
 
 Not copied: `.env` (real Gmail credentials) — reconfigure fresh when this
 becomes real, don't reuse the file.
