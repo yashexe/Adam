@@ -860,3 +860,19 @@ band edges are what they always were, ±7 wide. Not re-judgeable: the
 company-n, company-o, company-p, company-q and company-s postings, whose
 text was never saved (company-n's and company-p's have since closed on
 their boards).
+
+**Ablation: is the new-grad line itself moving the ground truth?** The
+same ground-truth batch was judged once more with the prompt rolled back
+to the version without the line (same profile, same four anchors). Fixed
+prompt minus rolled-back prompt, per posting: −3, −2, −1, −3, −3, −3, 0,
+−1, −5, +11. Nine of ten inside jitter; the one outlier is company-r
+(52 without the line, 63 with it), the only posting in the set that is
+scoped like a junior role, which is the line doing what it says. Anchors
+without the line: 89 / 68 / 5 / 83 — the new-grad anchor sat in band
+even without it, so the junior demotion measured earlier is batch-
+sensitive: it appeared in a batch with four junior-titled postings and
+not with one. The rolled-back run was also slightly *higher* than the
+fixed run on most roles, by 1–5 points — within jitter, and in the
+direction opposite to any claim that the line depresses scores. The
+profile edit, not the prompt line, accounts for the top-band
+compression, and that compression is itself at the jitter floor.
