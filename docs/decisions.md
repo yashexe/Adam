@@ -602,3 +602,21 @@ only say ready or not, not how much is left. Cost, free tier: an
 Organization plan is required for the domain-wide roster; person
 enrichment is credit-capped by account type, work-email signups get a
 materially larger allowance than a personal one, which Yash's is.
+
+
+**Correction, same day: Apollo's free plan does not include this
+endpoint.** A real key, added a few hours after the entry above, hit an
+immediate 403 on `people/match`: "not included in your Free plan and is
+not accessible, even with a master key." Every source consulted before
+building said otherwise — third-party pricing writeups, none of them
+Apollo's own docs stating it in so many words. First-party beats them:
+this is now confirmed, not inferred. The code itself needed no fix —
+`_apollo_match`'s existing "skip on any HTTP error" path degraded
+correctly, cached nothing false, and the offline test suite (name
+conflicts, credit gating, malformed response shapes) still holds
+regardless. What did need fixing: `provider_status` was reporting
+"ready" from key presence alone, which this 403 proves is not the same
+thing as the endpoint being reachable — it now makes one live probe call
+and reports the plan-gate error by name. The rung stays in the ladder,
+correct and inert, unless the Organization plan is ever purchased — a
+paid decision, deliberately not made here.

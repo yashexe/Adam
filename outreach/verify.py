@@ -689,12 +689,30 @@ def provider_status() -> list[dict]:
     key = os.getenv("APOLLO_API_KEY")
     if not key:
         rows.append({"provider": "apollo", "ready": False,
-                     "detail": "no APOLLO_API_KEY in .env (free person-enrichment tier; "
-                               "resolution only, not a mailbox verifier)"})
+                     "detail": "no APOLLO_API_KEY in .env (resolution only, not a mailbox verifier)"})
     else:
-        rows.append({"provider": "apollo", "ready": True,
-                     "detail": "key present; Apollo has no credits-remaining endpoint, "
-                               "so readiness here means only that a key exists"})
+        # A key existing is not the same as the endpoint being reachable:
+        # confirmed 2026-09-03 that Apollo's free plan returns a 403 for
+        # people/match specifically ("not included in your Free plan...
+        # even with a master key"), so a presence check alone would have
+        # reported this as ready when it never could answer. Apollo has no
+        # credits-remaining endpoint, so a real (free, harmless) probe call
+        # is the only way to know -- a plan-gate 403 is distinguished from
+        # every other failure so a transient error doesn't read as "needs
+        # a paid plan" when it's actually just offline for a moment.
+        probe = _apollo_match("Probe", "Readiness", "adam-readiness-check.invalid")
+        if isinstance(probe, str) and "not included in your" in probe:
+            rows.append({"provider": "apollo", "ready": False,
+                         "detail": "key present but the plan does not include people/match "
+                                   "(Organization/paid plan required for this endpoint)"})
+        elif isinstance(probe, str) and probe.startswith("apollo: HTTP"):
+            rows.append({"provider": "apollo", "ready": False, "detail": probe})
+        else:
+            # Any other outcome (a clean no-match, or an actual match) means
+            # the endpoint itself is reachable on this plan.
+            rows.append({"provider": "apollo", "ready": True,
+                         "detail": "key present and the endpoint answered; "
+                                   "Apollo has no credits-remaining endpoint to report"})
     return rows
 
 
