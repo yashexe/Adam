@@ -182,7 +182,7 @@ lost on a failed step, nothing gets contacted twice.
 
 ## Execution model [DECIDED, implemented 2026-08-23]
 
-`poll.py` today is pure Python, zero LLM calls, running unattended every 10
+`poll.py` today is pure Python, zero LLM calls, running unattended every 5
 minutes via cron on the Pi. Stages 3 and 5 need an actual agent — that
 can't live in that loop as-is, so this needed a different runtime.
 
@@ -198,9 +198,26 @@ alone — the standard is genuine engineering depth worth showing in an
 interview, and this happens to also be the cheaper path, not the other way
 around.
 
-**Human-triggered, not scheduled.** The skill runs when asked ("run
-outreach" in a Claude Code session), not on a cron-style unattended
-schedule the way `poll.py` is. Whether it's ever worth automating that
-trigger is a real but low-urgency open question — nothing about the
-pipeline design blocks on it, since stage 6 requires a human in the loop
-regardless of what triggers stage 3.
+**Unattended since 2026-09-03, with the same two human gates.** Until
+then the skill ran only when asked, which threw away the head start the
+tracker wins. Now two loops run on this Mac (`outreach/unattended.py`,
+`bin/tick.py`, `com.yash.adam-tick.plist`, installed by hand):
+
+- **Tick, every five minutes, deterministic.** One read-only SSH query for
+  postings newer than a watermark, the four hard rules, the ignore list,
+  the store's claims; survivors go to a queue. It fires when the oldest
+  has waited 15 minutes or five have piled up, which is what keeps the
+  judge's fixed per-call cost from being paid once per posting.
+- **Run, when the tick fires, one headless Claude session** of the
+  `outreach` skill in unattended mode, restricted to the tools it needs
+  and a 25-minute wall clock. Judge the window, prepare, and for each new
+  company within budget (three per run, eight per day, counted in the
+  store): research and resolve the slate; at 70 and up draft to rank one
+  when its address is clean and park the slate otherwise; at 65–69 park
+  the slate; at 58–64 list it as borderline. Never a draft to a `risky`
+  address without a human. Then the read-only reply check and a summary.
+
+The pick for a parked slate is a button in the review UI; the next run
+drafts it. Sending is Gmail. A failed run requeues its postings once.
+Companies in process through other channels are closed in the store by
+hand so the run cannot email them.

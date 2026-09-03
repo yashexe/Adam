@@ -475,3 +475,46 @@ for a day (a Proofpoint slate cost 16 s per candidate before that).
 Residual dependency: catch-all domains, about a third of them and
 skewed to larger companies, still need Hunter's roster; the reset date
 now shows in `outreach_run.py verifiers`.
+
+---
+
+**The pipeline runs itself; the human still picks and sends.**
+*(2026-09-03)*
+*Why:* every stage worked and resolution had just gone keyless, and the
+whole thing still slept until someone typed "run outreach". The tracker
+finds a posting within five minutes of it appearing; the pipeline then
+waited hours or a day for a session, which is exactly the queue-forming
+delay the project exists to beat. A morning batch was considered and
+rejected for the same reason. The trigger has to be the tracker's own
+rhythm, but the LLM cannot run at that rhythm: a headless session carries
+tens of thousands of tokens of fixed cost and the judge carries ~8k
+(profile plus anchors) per call, so firing on every arrival would
+multiply the judge's weekly cost from ~130k tokens to millions. Hence two
+loops: a free deterministic tick every five minutes that queues, and one
+bounded LLM run when the oldest queued posting has waited 15 minutes or
+five have piled up. What the run may do without a human was decided
+explicitly: draft to rank one when the address is clean and the score is
+70 or higher, because every pick that week had been rank one and the cost
+of being wrong is a drafter call and a discard; park the slate otherwise,
+and always in the 65–69 band; never draft to a `risky` address, whose
+label means "confirm the person". Caps of three companies per run and
+eight per day, counted in the store rather than by the prompt.
+*Alternatives:* morning-only batch (rejected — throws the head start
+away); fire the LLM on every arrival (rejected — the fixed-cost
+arithmetic above); stop at the slate for everything (rejected — every
+company would wait on the human twice, and picks had been rank one every
+time); running on the Pi (still impossible: 32-bit, no `claude`).
+*Consequence:* `outreach/unattended.py` (watermark, queue, budget, one
+retry on failure, stale-run recovery), `bin/tick.py` (lock, 25-minute
+wall clock, `--allowedTools` restricted to the skill's needs,
+`--permission-mode dontAsk`, a macOS notification when drafts land),
+`com.yash.adam-tick.plist` written but installed by hand like the UI
+agent. The store gains `slates` (a researched company parked for a pick;
+the review UI has the pick button, the next run drafts it, and the
+posting text is stored so a pick survives a closed posting) and
+`company_ignore` (a recruiting marketplace with 288 postings under one
+slug is not a company; a human adds these with a reason, and `prepare`
+says so when it skips one). Companies already in process through another
+channel are closed in the store by hand so the run cannot email them.
+Notion is untouched by the run: rows are for responses, never for
+unanswered outreach (Yash, 2026-09-02).

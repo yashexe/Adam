@@ -13,6 +13,8 @@ Outreach pipeline CLI — the deterministic half.
     python3 outreach_run.py ignore <slug> "<reason>" # this slug is not a company (marketplace, agency)
     python3 outreach_run.py slates                   # researched companies awaiting a pick
     python3 outreach_run.py slate approve <slug> "<name>" | dismiss <slug> ["<reason>"]
+    python3 outreach_run.py slate-save                  # park a researched slate (JSON on stdin)
+    python3 outreach_run.py slate-candidate <slug>      # everything needed to draft a parked slate
     python3 outreach_run.py tick [--since "YYYY-MM-DD HH:MM:SS"]   # the 5-minute check: prints fire|idle
     python3 outreach_run.py budget                   # what an unattended run may spend right now
     python3 outreach_run.py unattended-start <slug>  # the run is about to research this company
@@ -43,7 +45,7 @@ from outreach.pipeline import (
     resolve_candidate_slate,
 )
 from outreach.verify import provider_status, verify_email
-from qualify.semantic import build_batch, save_scores, unjudged
+from qualify.semantic import build_batch, cached_score, save_scores, unjudged
 
 # Cap on postings per judge invocation — see cmd_judge.
 JUDGE_BATCH_CAP = 40
@@ -443,6 +445,67 @@ def cmd_slate(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_slate_save(args: argparse.Namespace) -> int:
+    """Park a researched, resolved slate for a human pick. JSON on stdin:
+    {"candidate": {...prepare's object...}, "domain": ..., "slate": [...],
+     "resolved": [...verify-slate output...], "observed_address": ...,
+     "source_notes": ..., "personalization_context": [...],
+     "status": "awaiting", "reason": "why no draft"}."""
+    payload = json.load(sys.stdin)
+    cand = payload["candidate"]
+    store.save_slate(
+        company_slug=cand["company_slug"], platform=cand["platform"], job_id=str(cand["job_id"]),
+        job_title=cand.get("job_title"), job_url=cand.get("job_url"), score=cand.get("score"),
+        domain=payload.get("domain"), slate_json=json.dumps(payload.get("slate") or []),
+        resolved_json=json.dumps(payload.get("resolved") or []),
+        observed_address=payload.get("observed_address"),
+        source_notes=payload.get("source_notes"),
+        personalization_json=json.dumps(payload.get("personalization_context") or []),
+        status=payload.get("status") or store.SLATE_AWAITING, reason=payload.get("reason"),
+        description_text=cand.get("description_text"),
+    )
+    print(json.dumps({"company_slug": cand["company_slug"], "status": payload.get("status") or "awaiting"}))
+    return 0
+
+
+def cmd_slate_candidate(args: argparse.Namespace) -> int:
+    """Rebuild everything the drafter and finalize need for a parked slate,
+    so an approved pick can be drafted without re-researching. The posting
+    text comes from the board cache rather than being stored twice."""
+    from qualify.boards import job_data_for
+    row = store.slate_row(args.slug)
+    if row is None:
+        print(f"error: no slate for {args.slug}", file=sys.stderr)
+        return 1
+    stored = row["description_text"] if "description_text" in row.keys() else None
+    if stored:
+        job_data = {"title": row["job_title"], "description_text": stored}
+    else:
+        job_data = job_data_for({"platform": row["platform"], "job_id": row["job_id"],
+                                 "company_slug": row["company_slug"], "title": row["job_title"]})
+    if job_data is None:
+        print(f"error: the posting behind {args.slug}'s slate is gone from its board and "
+              f"no text was stored", file=sys.stderr)
+        return 1
+    judged = cached_score(row["platform"], row["job_id"]) or {}
+    out = {
+        "candidate": {
+            "company_slug": row["company_slug"], "platform": row["platform"],
+            "job_id": row["job_id"], "job_title": job_data["title"], "job_url": row["job_url"],
+            "score": row["score"], "judge_reason": judged.get("reason"), "funding_hint": None,
+            "description_text": job_data["description_text"],
+        },
+        "domain": row["domain"], "status": row["status"], "chosen_name": row["chosen_name"],
+        "slate": json.loads(row["slate_json"] or "[]"),
+        "resolved": json.loads(row["resolved_json"] or "[]"),
+        "observed_address": row["observed_address"], "source_notes": row["source_notes"],
+        "personalization_context": json.loads(row["personalization_json"] or "[]"),
+        "reason": row["reason"],
+    }
+    print(json.dumps(out, indent=2))
+    return 0
+
+
 def cmd_tick(args: argparse.Namespace) -> int:
     from outreach import unattended
     verdict, reason = unattended.tick(since=args.since)
@@ -544,6 +607,13 @@ def main() -> int:
     sa.add_argument("slug")
     sa.add_argument("name", nargs="?", help="chosen candidate (approve) or reason (dismiss)")
     sa.set_defaults(func=cmd_slate)
+
+    ss = sub.add_parser("slate-save", help="park a researched slate for a human pick (JSON on stdin)")
+    ss.set_defaults(func=cmd_slate_save)
+
+    sc = sub.add_parser("slate-candidate", help="everything needed to draft a parked slate")
+    sc.add_argument("slug")
+    sc.set_defaults(func=cmd_slate_candidate)
 
     tk = sub.add_parser("tick", help="the 5-minute unattended check; prints fire or idle")
     tk.add_argument("--since", help="reset the watermark (tracker format, UTC) to back-fill")

@@ -130,6 +130,9 @@ _ADDED_COLUMNS = {
     "outreach_log": ("contact_role", "replied_at", "reply_checked_at",
                      "follow_up_at"),
     "pending_outreach": ("source_notes", "contact_slate", "linkedin_json"),
+    # The posting text at research time, so an approved pick can still be
+    # drafted after the posting closes on its board (days can pass).
+    "slates": ("description_text",),
 }
 
 
@@ -478,6 +481,7 @@ def save_slate(
     slate_json: str, resolved_json: str | None, observed_address: str | None,
     source_notes: str | None, personalization_json: str | None,
     status: str = SLATE_AWAITING, reason: str | None = None,
+    description_text: str | None = None,
 ) -> None:
     """Record a researched, resolved slate. Replaces any earlier row for the
     company: a slate is the latest research, not a history."""
@@ -485,8 +489,8 @@ def save_slate(
     conn.execute(
         """INSERT INTO slates (company_slug, platform, job_id, job_title, job_url,
                 score, domain, slate_json, resolved_json, observed_address,
-                source_notes, personalization_json, status, reason)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                source_notes, personalization_json, status, reason, description_text)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(company_slug) DO UPDATE SET
                 platform=excluded.platform, job_id=excluded.job_id,
                 job_title=excluded.job_title, job_url=excluded.job_url,
@@ -496,10 +500,11 @@ def save_slate(
                 source_notes=excluded.source_notes,
                 personalization_json=excluded.personalization_json,
                 status=excluded.status, reason=excluded.reason,
+                description_text=excluded.description_text,
                 chosen_name=NULL, updated_at=datetime('now')""",
         (company_slug, platform, job_id, job_title, job_url, score, domain,
          slate_json, resolved_json, observed_address, source_notes,
-         personalization_json, status, reason),
+         personalization_json, status, reason, description_text),
     )
     conn.commit()
     conn.close()

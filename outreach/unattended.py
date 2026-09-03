@@ -35,10 +35,10 @@ from qualify.eligibility import check_title
 
 from outreach import store
 
-FIRE_AGE_MINUTES = 15
-FIRE_COUNT = 5
-PER_RUN = 3
-PER_DAY = 8
+FIRE_AGE_MINUTES = int(os.getenv("ADAM_FIRE_AGE_MINUTES", 15))
+FIRE_COUNT = int(os.getenv("ADAM_FIRE_COUNT", 5))
+PER_RUN = int(os.getenv("ADAM_PER_RUN", 3))
+PER_DAY = int(os.getenv("ADAM_PER_DAY", 8))
 RETRY_MAX = 2
 STALE_RUN_MINUTES = 45  # an inflight run older than this is assumed dead
 

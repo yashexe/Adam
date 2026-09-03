@@ -280,6 +280,21 @@ matches and correctly closed out a company via the prior-contact check
    can work. Catch-all domains still need Hunter's roster; that is the
    residual dependency. Derivation: `docs/decisions.md`.
 
+13. **The pipeline only ran when asked** [FIXED 2026-09-03] — every stage
+   was built, resolution had just gone keyless, and the whole thing still
+   slept until someone typed "run outreach", which threw away the head
+   start the tracker exists to win. Now a deterministic tick every five
+   minutes (matching the Pi's poll) queues new eligible postings behind a
+   watermark and fires one headless run when the oldest has waited 15
+   minutes or five have piled up. The run drafts to rank one on a clean
+   resolve for scores ≥ 70, parks the slate for a human pick otherwise
+   (and always for 65–69), lists 58–64 as borderline, and never drafts to
+   a `risky` address. Budgets, retries, and an ignore list for slugs that
+   are not companies (a recruiting marketplace with 288 postings) live in
+   `outreach/unattended.py` and the store, not in the prompt. Both human
+   gates are untouched: picking is a button in the review UI, sending is
+   Gmail. Derivation: `docs/decisions.md`.
+
 The profile no longer blocks anything — it is hand-written in
 `qualify/profile.py` from the current resume, and Instaply's `parser.py` was
 not revived.
@@ -328,7 +343,20 @@ python3 outreach_run.py status                      # pending drafts / contacted
 python3 outreach_run.py finalize                    # verify + Gmail draft + claim (JSON on stdin)
 python3 outreach_run.py bumps                       # who's due their one follow-up
 python3 outreach_run.py bump <company>              # draft it, in-thread (body on stdin)
+python3 outreach_run.py slates                      # researched companies awaiting your pick
+python3 outreach_run.py slate approve <company> "<name>"   # the next unattended run drafts it
+python3 outreach_run.py ignore <slug> "<reason>"    # not a company (marketplace, agency)
+python3 outreach_run.py tick                        # the 5-minute unattended check: fire|idle
 ```
+
+Unattended, since 2026-09-03: `bin/tick.py` (run by
+`com.yash.adam-tick.plist` every five minutes, installed by hand) asks the
+Pi for new postings and, when enough have waited, launches one bounded
+headless run of the `outreach` skill — judge, research, resolve, draft to
+rank one when the address is clean, park the slate otherwise. Three
+companies per run, eight per day, counted in code. Drafts land in Gmail
+exactly as before; the pick for a parked slate is a button in the review
+UI. `docs/decisions.md`, "The pipeline runs itself".
 
 This writes to local `outreach.db`, not `tracker.db` — see
 `docs/decisions.md`.

@@ -83,10 +83,23 @@ def build_state() -> dict:
     for claim in pending:
         state = states.get(claim["company_slug"])
         claim["gmail"] = asdict(state) if state else None
+    from outreach import unattended
+    slates = _rows(store.slates())
+    for s in slates:
+        for key in ("slate_json", "resolved_json", "personalization_json"):
+            try:
+                s[key.replace("_json", "")] = json.loads(s.get(key) or "[]")
+            except (json.JSONDecodeError, TypeError):
+                s[key.replace("_json", "")] = []
     return {
         "pending": pending,
         "discarded": _rows(store.discarded()),
         "contacted": _rows(store.contacted()),
+        # The unattended run parks companies here when rank one was not
+        # clean or the score sat in 65-69; picking is the human step the
+        # design keeps, so it happens here, not in the run.
+        "slates": [s for s in slates if s["status"] in ("awaiting", "approved")],
+        "last_run": unattended.load_state().get("last_run"),
     }
 
 
@@ -215,7 +228,23 @@ def action_check_replies(_: dict) -> dict:
     return {"checked": checked, "replied": replied}
 
 
+def action_slate_pick(company: str, name: str) -> dict:
+    """Record the human's pick. The next unattended run drafts to it; nothing
+    is written to Gmail here."""
+    row = store.approve_slate(company, name)
+    invalidate()
+    return {"company": company, "chosen_name": row["chosen_name"], "status": row["status"]}
+
+
+def action_slate_dismiss(company: str, reason: str) -> dict:
+    row = store.dismiss_slate(company, reason or "dismissed in the review UI")
+    invalidate()
+    return {"company": company, "status": row["status"]}
+
+
 ACTIONS = {
+    "slate-pick": lambda p: action_slate_pick(p["company"], p["name"]),
+    "slate-dismiss": lambda p: action_slate_dismiss(p["company"], p.get("reason", "")),
     "discard": lambda p: action_discard(p["company"]),
     "mark-sent": lambda p: action_mark_sent(p["company"]),
     "update": lambda p: action_update(p["company"], p["subject"], p["body"]),
@@ -537,8 +566,46 @@ function card(c) {
   </div>`;
 }
 
+// A parked slate: the run researched and resolved it but did not draft.
+// Each candidate gets a pick button; the next run drafts to the pick.
+function slateCard(sl) {
+  const rows = (sl.resolved.length ? sl.resolved : sl.slate).map(c => {
+    const [vLabel, vWhy] = VERIFY[c.verify_label] || [c.verify_label || "unresolved", c.verify_reason || ""];
+    const chosen = sl.chosen_name === c.name;
+    const addr = c.address ? `<span class="mail">${esc(c.address)}</span>` : `<span class="muted">no address</span>`;
+    const src = c.address_source === "probe" ? ` <span class="muted">(probe)</span>` : "";
+    return `<div class="listrow">
+      <b>${esc(c.name)}</b> <span class="muted">${esc(c.role || "")}</span> ${addr}${src}
+      <span class="vchip ${esc(c.verify_label || "")}" title="${esc(vWhy)}">${esc(vLabel)}</span>
+      ${chosen ? `<span class="chip draft">picked</span>`
+               : (sl.status === "awaiting" && c.address
+                   ? `<button data-act="slate-pick" data-name="${esc(c.name)}">Pick ${esc(c.name.split(" ")[0])}</button>` : "")}
+      ${c.evidence ? `<div class="note small">${esc(c.evidence)}</div>` : ""}
+      ${c.verify_reason && !c.address ? `<div class="note small">${esc(c.verify_reason)}</div>` : ""}
+    </div>`;
+  }).join("");
+  return `
+  <div class="card" data-company="${esc(sl.company_slug)}">
+    <div class="top">
+      <span class="slug">${esc(sl.company_slug)}</span>
+      <span class="chip ${sl.status === "approved" ? "draft" : "unknown"}">${sl.status === "approved" ? "picked · drafts on the next run" : "awaiting your pick"}</span>
+      <span class="score">score ${sl.score ?? "–"}</span>
+    </div>
+    <div class="title">${sl.job_url ? `<a href="${esc(sl.job_url)}" target="_blank" rel="noopener">${esc(sl.job_title)} ↗</a>` : esc(sl.job_title || "")}</div>
+    ${sl.reason ? `<div class="note small">Why no draft: ${esc(sl.reason)}</div>` : ""}
+    ${rows}
+    ${sl.source_notes ? `<div class="note small">How they were found: ${esc(sl.source_notes)}</div>` : ""}
+    <div class="row">
+      <button class="danger" data-act="slate-dismiss">Dismiss</button>
+    </div>
+  </div>`;
+}
+
 function render(s) {
   const app = document.getElementById("app");
+  const slates = s.slates.length ? s.slates.map(slateCard).join("") : `<p class="empty">Nothing waiting on you.</p>`;
+  const lr = s.last_run;
+  const lastRun = lr ? `<div class="note small">Last unattended run ${esc(lr.finished_at || "")} UTC · ${esc(lr.status)} · ${lr.postings} posting(s)${lr.requeued ? `, ${lr.requeued} requeued` : ""}</div>` : "";
   const pending = s.pending.length
     ? s.pending.map(card).join("")
     : `<p class="empty">No pending drafts.</p>`;
@@ -565,6 +632,7 @@ function render(s) {
     : `<p class="empty">None yet.</p>`;
 
   app.innerHTML = `
+    <h2>Awaiting your pick (${s.slates.length})</h2>${lastRun}${slates}
     <h2>Pending (${s.pending.length})</h2>${pending}
     <h2>Discarded (${s.discarded.length}) · open for a future attempt</h2>
     <div class="card">${discarded}</div>
@@ -622,6 +690,22 @@ document.addEventListener("click", async e => {
   const company = card.dataset.company;
   const act = btn.dataset.act;
   const editor = card.querySelector(".editor");
+
+  if (act === "slate-pick" || act === "slate-dismiss") {
+    if (act === "slate-dismiss" && !confirm(`Dismiss the ${company} slate? A higher-scoring posting later reopens it.`)) return;
+    btn.disabled = true;
+    try {
+      if (act === "slate-pick") {
+        const r = await post("slate-pick", {company, name: btn.dataset.name});
+        flash(`${company}: ${r.chosen_name} picked. The next unattended run drafts it.`);
+      } else {
+        await post("slate-dismiss", {company, reason: "dismissed in the review UI"});
+        flash(`${company} slate dismissed.`);
+      }
+    } catch (err) { flash(err.message); }
+    await refresh();
+    return;
+  }
 
   const reading = card.querySelector(".reading");
   if (act === "edit") {

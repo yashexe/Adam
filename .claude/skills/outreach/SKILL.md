@@ -288,6 +288,82 @@ on — a reply is answered by a human, a bounce means the address was
 wrong, and a stale thread is only worth reopening with genuinely new
 information.
 
+## Unattended mode
+
+Launched by `bin/tick.py` with no human in the session (docs/decisions.md,
+2026-09-03). The one rule holds absolutely. On top of it:
+
+**Never ask, never wait.** Every decision below is already made. If a step
+fails, write it in the summary and move on. When the budget is gone, stop.
+
+**Only `python3 outreach_run.py …` changes state.** Use the Write tool for
+payload files (the session is denied every other shell command) and
+`date "+%A"` for the weekday.
+
+Order of work:
+
+1. `python3 outreach_run.py budget`. `per_run` is how many new companies
+   this run may research; `approved_slates` lists companies a human has
+   already picked for.
+2. **Approved slates first** — they cost no research. For each slug in
+   `approved_slates`: `python3 outreach_run.py slate-candidate <slug>`
+   prints the candidate, domain, slate, resolved slate, chosen name,
+   source notes and personalization digest. Run the drafter (step 4),
+   LinkedIn drafts by bar (step 4.5) and finalize (step 5) with
+   `contact_name` set to the chosen name and `contact_slate` set to the
+   resolved slate. Finalize marks the slate drafted.
+3. Judge the window exactly as step 1, looping until "already judged",
+   then `python3 outreach_run.py prepare --days 1 --min-score 58 --json`.
+4. Walk the candidates in score order until `per_run` new companies have
+   been started:
+   - **70 and up.** `python3 outreach_run.py unattended-start <slug>`
+     first: it counts the company against today's budget and its reply
+     says if nothing may be spent. Then contact-finder (step 2) and
+     verify-slate (step 3). Rank one is **clean** when its `verify_label`
+     is `verified`, whether from Hunter's pattern or roster or from a
+     full-name probe. Clean: drafter, LinkedIn by bar, finalize, and a
+     `DRAFTED:` line. Anything else for rank one — `risky`, `catch_all`,
+     `unverified`, or no address — means `python3 outreach_run.py
+     slate-save` with status `awaiting`, no draft, and a `SLATE:` line.
+     Never draft to a `risky` address unattended: that label means
+     "confirm the person", and there is nobody here to.
+   - **65 to 69.** unattended-start, contact-finder, verify-slate,
+     slate-save with status `awaiting`. No draft. `SLATE:` line.
+   - **58 to 64.** No spend. A `BORDERLINE:` line with score and title.
+   - An empty slate from contact-finder is a `SKIPPED:` line carrying the
+     source notes. A finalize that fails lint twice, or exits with
+     `prior_contact` or no deliverable address, is a `SLATE:` (save it,
+     reason in the payload) or `SKIPPED:` line respectively.
+5. `python3 outreach_run.py replies` — read-only against Gmail. Report
+   what it found. Never draft a bump unattended; bumps are per-company
+   human decisions.
+6. Write the summary to the path named in the prompt with the Write
+   tool, then stop.
+
+Summary format, one item per line with these exact prefixes (the wrapper
+counts them):
+
+```
+DRAFTED: <slug> — <name> (<role>) <address> [<label>] score <n>
+SLATE: <slug> — awaiting (<why no draft>) score <n>
+BORDERLINE: <slug> — score <n> — <title>
+SKIPPED: <slug> — <reason>
+REPLY: <slug> — <what the replies check found>
+BUMP-ELIGIBLE: <slug> — <business days silent>
+ERROR: <what failed and where the run stopped>
+```
+
+Caps live in code (`budget`, `unattended-start`), not in your counting: if
+`unattended-start` reports `per_run` 0, research nothing more.
+
+**In an interactive session** the slates table is yours to drive. `python3
+outreach_run.py slates` lists what is parked; `slate approve <slug> "<name>"`
+records a pick that the next unattended run drafts, or hand
+`slate-candidate <slug>` straight to the drafter and finalize now. `slate
+dismiss <slug> "<reason>"` closes one until a higher-scoring posting
+appears. Companies with an awaiting or approved slate are skipped by
+prepare, so nothing is ever researched twice.
+
 ## Costs worth knowing
 
 - The judge is one batched call over the whole unjudged window, not one

@@ -6,29 +6,15 @@ next. Two items, both architectural rather than incremental — the individual
 pipeline stages are solid; what's missing is how often and how automatically
 they run.
 
-## Execution model: chat-triggered → scheduled
+## Execution model: chat-triggered → scheduled [DONE 2026-09-03]
 
-The whole premise of this project is speed to posting — reaching a hiring
-contact before the ATS queue forms (see the root `CLAUDE.md`). Right now that
-promise has a gap: the `outreach` skill only runs when a human types "run
-outreach" in a Claude Code session. A posting can sit qualified-but-uncontacted
-for however long it takes someone to remember to open a session, which is
-exactly the delay ashby-ny-tracker's 10-minute poll cycle exists to eliminate
-everywhere else in this pipeline.
-
-Closing that gap is the highest-leverage remaining change — not because any
-stage is weak, but because it multiplies the value of every stage that
-already works. A better-verified address or a properly-judged ranking only
-pays off if outreach actually happens promptly after a posting appears.
-
-The real constraint isn't code, it's environment. Claude Code needs to run
-unattended on a schedule, which means the Mac needs to be awake and reachable
-when it fires — the Pi is ruled out for this specific piece (32-bit ARM, no
-`claude` binary, doesn't meet Claude Code's Node 18+ requirement). Stage 6
-(human approval) doesn't change: drafts still land in Gmail unattended,
-exactly as they do today, and a human still has to press Send. What changes
-is only how promptly stages 1–5 run, never whether a human is in the loop for
-anything that matters.
+Closed. The premise was always speed to posting, and the skill only ran
+when someone typed "run outreach". Now a deterministic tick every five
+minutes queues new eligible postings and fires one bounded headless run;
+drafts land in Gmail unattended and a parked slate waits for a pick in
+the review UI. Design and caps: `PIPELINE.md`, Execution model;
+reasoning: `docs/decisions.md`, "The pipeline runs itself". The Mac still
+has to be awake; the Pi is still ruled out for this piece.
 
 ## Offload the deterministic half to the Pi
 
