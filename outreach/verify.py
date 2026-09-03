@@ -49,6 +49,7 @@ import socket
 import ssl
 import subprocess
 import time
+import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -186,6 +187,7 @@ def _label_from(data: dict) -> tuple[str, str]:
 # mailbox Hunter had called dead now accepts mail.
 
 _SMTP_TIMEOUT = 8
+_UNREACHABLE_TTL_SECONDS = 24 * 3600  # an MX that drops us is retried daily
 _ENHANCED_CODE = re.compile(r"\b([245])\.(\d{1,3})\.(\d{1,3})\b")
 
 # RFC 3463 enhanced codes that are the server's verdict on the *mailbox*.
@@ -232,6 +234,98 @@ def _smtp_reply(message: bytes) -> tuple[str, str]:
     return (".".join(match.groups()) if match else ""), text
 
 
+def _quietly_quit(server) -> None:
+    try:
+        server.quit()
+    except Exception:
+        pass
+
+
+def _open_probe_session(domain: str):
+    """An SMTP session ready for RCPT TO at the domain's lowest-preference
+    MX, or a skip string saying why there cannot be one. EHLO, STARTTLS
+    when offered, MAIL FROM the null sender. Callers must `_quietly_quit`."""
+    cache = _load_cache()
+    stale = cache.get(f"unreachable:{domain}")
+    if stale and time.time() - stale.get("cached_at", 0) < _UNREACHABLE_TTL_SECONDS:
+        return f"smtp: {stale.get('why', 'unreachable')} (remembered; retried daily)"
+    hosts, why = _mx_hosts(domain)
+    if not hosts:
+        return f"smtp: {why} for {domain}"
+    host = hosts[0]
+    try:
+        server = smtplib.SMTP(
+            host, 25, timeout=_SMTP_TIMEOUT,
+            local_hostname=socket.gethostname() or "adam.local",
+        )
+    except (OSError, smtplib.SMTPException) as exc:
+        # A slate of three candidates at a Proofpoint-hosted domain cost
+        # 16 s each on the 2026-09-02 benchmark; remember the dead door.
+        why = f"cannot reach {host}:25 ({type(exc).__name__}: {exc})"
+        cache[f"unreachable:{domain}"] = {"why": why, "cached_at": time.time()}
+        _save_cache(cache)
+        return f"smtp: {why}"
+    try:
+        if server.ehlo()[0] != 250:
+            server.helo()
+        if server.has_extn("starttls"):
+            # Being a well-behaved client, not securing a payload: there is
+            # no message. MX certificates are routinely issued for a name
+            # other than the MX host, so verification would only add a
+            # failure mode to a probe that carries nothing.
+            context = ssl.create_default_context()
+            context.check_hostname = False
+            context.verify_mode = ssl.CERT_NONE
+            server.starttls(context=context)
+            server.ehlo()
+        code, msg = server.mail("")
+        if code != 250:
+            _quietly_quit(server)
+            return f"smtp: {host} refused the null sender ({code} {_smtp_reply(msg)[1][:80]})"
+    except (OSError, smtplib.SMTPException) as exc:
+        _quietly_quit(server)
+        return f"smtp: session with {host} failed ({type(exc).__name__}: {exc})"
+    return host, server
+
+
+def _rcpt_verdict(server, address: str) -> tuple[str | None, dict]:
+    """The server's verdict on one mailbox: VERIFIED / INVALID / RISKY, or
+    None when the reply is about this sender, this IP, or this moment
+    rather than the mailbox. `raw` carries the reply either way."""
+    code, msg = server.rcpt(address)
+    enhanced, text = _smtp_reply(msg)
+    raw = {"code": code, "enhanced": enhanced, "message": text[:200]}
+    if code in (250, 251):
+        return VERIFIED, raw
+    if enhanced in _NO_SUCH_MAILBOX:
+        return INVALID, raw
+    if enhanced in _MAILBOX_FULL:
+        return RISKY, raw
+    return None, raw
+
+
+def _accepts_random(server, domain: str, raw: dict) -> bool:
+    """Does the server say yes to a local part nobody could have? Then it
+    says yes to everything, and no probe can tell one mailbox from
+    another there."""
+    probe = f"{secrets.token_hex(6)}.zq@{domain}"
+    pcode, _ = server.rcpt(probe)
+    raw["catch_all_probe"] = pcode
+    return pcode in (250, 251)
+
+
+def _catch_all_cached(cache: dict, domain: str) -> bool | None:
+    entry = cache.get(f"catchall:{domain}")
+    if entry and time.time() - entry.get("cached_at", 0) < _DOMAIN_TTL_SECONDS:
+        return bool(entry.get("catch_all"))
+    return None
+
+
+def _remember_catch_all(cache: dict, domain: str, flag: bool) -> None:
+    cache[f"catchall:{domain}"] = {"catch_all": flag, "cached_at": time.time()}
+    _save_cache(cache)
+
+
 def _verify_via_smtp(email: str) -> VerificationResult | str:
     """Ask the domain's own mail server whether the mailbox exists.
 
@@ -260,69 +354,50 @@ def _verify_via_smtp(email: str) -> VerificationResult | str:
     both are handled — verdict when given, skip otherwise.
     """
     domain = email.rsplit("@", 1)[-1].lower()
-    hosts, why = _mx_hosts(domain)
-    if not hosts:
-        return f"smtp: {why} for {domain}"
-    host = hosts[0]
+    cache = _load_cache()
+    if _catch_all_cached(cache, domain):
+        return VerificationResult(
+            email=email, label=CATCH_ALL,
+            reason="domain accepts all mail; mailbox unconfirmable (domain fact cached)",
+            raw={"catch_all_cached": True},
+        )
+    session = _open_probe_session(domain)
+    if isinstance(session, str):
+        return session
+    host, server = session
     raw: dict = {"mx": host}
     try:
-        server = smtplib.SMTP(
-            host, 25, timeout=_SMTP_TIMEOUT,
-            local_hostname=socket.gethostname() or "adam.local",
-        )
-    except (OSError, smtplib.SMTPException) as exc:
-        return f"smtp: cannot reach {host}:25 ({type(exc).__name__}: {exc})"
-    try:
-        if server.ehlo()[0] != 250:
-            server.helo()
-        if server.has_extn("starttls"):
-            # Being a well-behaved client, not securing a payload: there is
-            # no message. MX certificates are routinely issued for a name
-            # other than the MX host, so verification would only add a
-            # failure mode to a probe that carries nothing.
-            context = ssl.create_default_context()
-            context.check_hostname = False
-            context.verify_mode = ssl.CERT_NONE
-            server.starttls(context=context)
-            server.ehlo()
-        code, msg = server.mail("")
-        if code != 250:
-            return f"smtp: {host} refused the null sender ({code} {_smtp_reply(msg)[1][:80]})"
-        code, msg = server.rcpt(email)
-        enhanced, text = _smtp_reply(msg)
-        raw.update({"code": code, "enhanced": enhanced, "message": text[:200]})
-        if code in (250, 251):
-            probe = f"{secrets.token_hex(6)}.zq@{domain}"
-            pcode, _ = server.rcpt(probe)
-            raw["catch_all_probe"] = pcode
-            if pcode in (250, 251):
+        label, reply = _rcpt_verdict(server, email)
+        raw.update(reply)
+        if label is None:
+            kind = ("temporary refusal" if 400 <= reply["code"] < 500
+                    else "refused without a mailbox verdict")
+            return f"smtp: {host} {kind} ({reply['code']} {reply['enhanced']} {reply['message'][:80]})"
+        if label == VERIFIED:
+            if _accepts_random(server, domain, raw):
+                _remember_catch_all(cache, domain, True)
                 return VerificationResult(
                     email=email, label=CATCH_ALL,
                     reason="domain accepts all mail; mailbox unconfirmable", raw=raw,
                 )
+            _remember_catch_all(cache, domain, False)
             return VerificationResult(
                 email=email, label=VERIFIED,
                 reason=f"SMTP-confirmed deliverable by {host}", raw=raw,
             )
-        if enhanced in _NO_SUCH_MAILBOX:
+        if label == INVALID:
             return VerificationResult(
                 email=email, label=INVALID,
-                reason=f"{host} reports no such mailbox ({code} {enhanced})", raw=raw,
+                reason=f"{host} reports no such mailbox ({reply['code']} {reply['enhanced']})", raw=raw,
             )
-        if enhanced in _MAILBOX_FULL:
-            return VerificationResult(
-                email=email, label=RISKY,
-                reason=f"{host} reports the mailbox is full ({code} {enhanced})", raw=raw,
-            )
-        kind = "temporary refusal" if 400 <= code < 500 else "refused without a mailbox verdict"
-        return f"smtp: {host} {kind} ({code} {enhanced} {text[:80]})"
+        return VerificationResult(
+            email=email, label=RISKY,
+            reason=f"{host} reports the mailbox is full ({reply['code']} {reply['enhanced']})", raw=raw,
+        )
     except (OSError, smtplib.SMTPException) as exc:
         return f"smtp: session with {host} failed ({type(exc).__name__}: {exc})"
     finally:
-        try:
-            server.quit()
-        except Exception:
-            pass
+        _quietly_quit(server)
 
 
 def _verify_via_zerobounce(email: str) -> VerificationResult | str:
@@ -629,7 +704,10 @@ def credits_remaining() -> tuple[int | None, str]:
     used = verifications.get("used", searches.get("used"))
     if available is None:
         return None, "unknown"
-    return max(available - (used or 0), 0), f"used {used} of {available}"
+    note = f"used {used} of {available}"
+    if data.get("reset_date"):
+        note += f", resets {data['reset_date']}"
+    return max(available - (used or 0), 0), note
 
 
 # ── Address resolution ─────────────────────────────────────────────────────
@@ -814,6 +892,13 @@ def resolve_address(
         tried.append(f"{source} address {address} does not exist "
                      f"({result.reason})")
 
+    # Keyless rung: the domain's own server stands in for the roster.
+    probed = _probe_rung(emails, first, last, domain)
+    if isinstance(probed, str):
+        tried.append(probed)
+    else:
+        return probed
+
     if fallback and is_role_account(fallback):
         return None, VerificationResult(
             email=fallback,
@@ -910,12 +995,19 @@ def resolve_slate(
             pattern, emails, first, last, domain
         )
         if not attempts:
-            out.append(SlateResolution(
-                name, None, "", UNVERIFIED, None,
-                (blocked or f"no pattern or roster entry at {domain} "
-                            f"({pattern or 'no pattern'}; {note})")
-                + fallback_note,
-            ))
+            # Probing is free, so every unresolved candidate gets the
+            # keyless rung regardless of whether an earlier one verified.
+            probed = _probe_rung(emails, first, last, domain)
+            if isinstance(probed, str):
+                out.append(SlateResolution(
+                    name, None, "", UNVERIFIED, None,
+                    (blocked + "; " if blocked else "") + probed + fallback_note,
+                ))
+            else:
+                address, result = probed
+                out.append(SlateResolution(
+                    name, address, "probe", result.label, None, result.reason,
+                ))
             continue
 
         if have_verified:
@@ -946,3 +1038,201 @@ def resolve_slate(
             ))
 
     return out
+
+
+# ── Keyless resolution ─────────────────────────────────────────────────────
+# When Hunter's search quota is gone — every counter on the free plan hit
+# zero by 2026-08-28 and again by 2026-09-02; it resets on the 11th —
+# `confirm_pattern` returns nothing, and a candidate at a company with no
+# observed personal address is unresolvable. Three researched companies
+# produced zero drafts on 2026-09-01 for exactly this reason. The domain's
+# own mail server can stand in for the roster on every domain that rejects
+# unknown recipients: render the conventional patterns for the name, ask
+# the server which one exists, take it. On a catch-all domain nothing
+# keyless works (the server says yes to everything) and Hunter's roster is
+# still the only route.
+#
+# Identity is the risk, exactly as with Hunter's pattern render, and it is
+# handled by tiering the patterns rather than by pretending the risk away:
+#
+#   full-name patterns (first.last, firstlast, ...) put the whole name in
+#     the address. A hit is identity-bound and keeps the probe's label.
+#   partial patterns ({first}, {f}{last}, {first}{l}, ...) would match a
+#     namesake as readily as the intended person. A hit is labeled RISKY
+#     with the reason spelled out, so the review card says "confirm the
+#     person" instead of "verified". They cannot be dropped: {first} is the
+#     convention at 12 of the 18 domains in the roster cache, which is the
+#     small-company norm this pipeline lives in. The company-c wrong-person
+#     case (2026-08-24) was a {first}{l} render labeled verified — the
+#     label is the fix, not the exclusion.
+#
+# When a Hunter roster is cached for the domain, `_name_conflict` still
+# runs against the probed address, same as for a pattern render. Every
+# probed address is cached with its verdict, so finalize's re-verification
+# of a probed pick is a cache hit and re-running a slate costs nothing.
+
+_FULL_NAME_PATTERNS = ("{first}.{last}", "{first}{last}", "{first}_{last}",
+                       "{last}.{first}", "{first}-{last}")
+_PARTIAL_NAME_PATTERNS = ("{first}", "{f}{last}", "{f}.{last}", "{first}{l}",
+                          "{first}.{l}", "{last}")
+
+
+@dataclass
+class ProbeResolution:
+    address: str | None
+    pattern: str = ""
+    partial: bool = False
+    reason: str = ""
+    probed: dict = field(default_factory=dict)  # address -> verdict
+
+
+def _name_token(name: str) -> str:
+    """ASCII, lowercase, letters and digits only: O'Brien -> obrien,
+    José -> jose, Van Der Berg -> vanderberg."""
+    text = unicodedata.normalize("NFKD", name or "").encode("ascii", "ignore").decode()
+    return re.sub(r"[^a-z0-9]", "", text.lower())
+
+
+def _pattern_plan(first: str, last: str, domain: str) -> list[tuple[str, str, bool]]:
+    """(address, pattern, partial) in the order they should be tried."""
+    f, l = _name_token(first), _name_token(last)
+    if not f:
+        return []
+    tiers = ([(False, _FULL_NAME_PATTERNS), (True, _PARTIAL_NAME_PATTERNS)]
+             if l else [(True, ("{first}",))])
+    plan, seen = [], set()
+    for partial, patterns in tiers:
+        for pattern in patterns:
+            local = _apply_pattern(pattern, f, l)
+            if not local:
+                continue
+            address = f"{local}@{domain}"
+            if address not in seen:
+                seen.add(address)
+                plan.append((address, pattern, partial))
+    return plan
+
+
+def _first_hit(plan, probed) -> tuple[str, str, bool] | None:
+    for address, pattern, partial in plan:
+        if probed.get(address) == VERIFIED:
+            return address, pattern, partial
+    return None
+
+
+def _resolution(plan, probed, domain: str, notes: list[str]) -> ProbeResolution:
+    hit = _first_hit(plan, probed)
+    if not hit:
+        return ProbeResolution(
+            None, reason=(f"keyless: none of {len(plan)} conventional patterns exist at "
+                          f"{domain}" + ("; " + "; ".join(notes) if notes else "")),
+            probed=probed,
+        )
+    address, pattern, partial = hit
+    others = [a for a, v in probed.items() if v == VERIFIED and a != address]
+    if partial:
+        reason = (f"keyless: {pattern} exists at {domain} but only part of the name "
+                  f"is in it, so a namesake would match too — confirm the person "
+                  f"before sending")
+    else:
+        reason = f"keyless: {pattern} exists at {domain} and carries the full name"
+    if others:
+        reason += f"; also exists: {', '.join(others)}"
+    return ProbeResolution(address, pattern, partial, reason, probed)
+
+
+def probe_patterns(
+    first: str, last: str, domain: str, *, use_cache: bool = True
+) -> ProbeResolution:
+    """Which conventional address for this name exists at the domain,
+    according to the domain's own mail server. One SMTP session, at most
+    a dozen RCPT TOs, no vendor, no credit. Stops at the first full-name
+    hit; probes every partial pattern so the reason can say when more than
+    one exists. Returns address=None on a catch-all domain, when the
+    server will not answer, or when nothing exists."""
+    plan = _pattern_plan(first, last, domain)
+    if not plan:
+        return ProbeResolution(None, reason="keyless: no name to render")
+    cache = _load_cache()
+    catch_all = _catch_all_cached(cache, domain) if use_cache else None
+    if catch_all:
+        return ProbeResolution(
+            None, reason=(f"keyless: {domain} accepts all mail, so no probe can tell "
+                          f"one mailbox from another (needs Hunter's roster)"),
+        )
+    probed: dict[str, str] = {}
+    pending = []
+    for address, pattern, partial in plan:
+        entry = cache.get(address) if use_cache else None
+        if entry and entry.get("label") in (VERIFIED, INVALID):
+            probed[address] = entry["label"]
+        else:
+            pending.append((address, pattern, partial))
+    hit = _first_hit(plan, probed)
+    if (hit and not hit[2]) or not pending:
+        return _resolution(plan, probed, domain, [])
+
+    session = _open_probe_session(domain)
+    if isinstance(session, str):
+        return ProbeResolution(None, reason="keyless: " + session, probed=probed)
+    host, server = session
+    notes: list[str] = []
+    try:
+        if catch_all is None:
+            if _accepts_random(server, domain, {}):
+                _remember_catch_all(cache, domain, True)
+                return ProbeResolution(
+                    None, reason=(f"keyless: {domain} accepts all mail, so no probe can "
+                                  f"tell one mailbox from another (needs Hunter's roster)"),
+                    probed=probed,
+                )
+            _remember_catch_all(cache, domain, False)
+        for address, pattern, partial in pending:
+            label, raw = _rcpt_verdict(server, address)
+            if label is None:
+                notes.append(f"{address}: no verdict ({raw['code']} {raw['enhanced']})")
+                if 400 <= raw["code"] < 500:
+                    notes.append("server asked to slow down; stopped probing")
+                    break
+                continue
+            probed[address] = label
+            if label in (VERIFIED, INVALID):
+                cache[address] = {
+                    "label": label, "score": None,
+                    "reason": (f"SMTP-confirmed deliverable by {host}" if label == VERIFIED
+                               else f"{host} reports no such mailbox ({raw['code']} {raw['enhanced']})")
+                              + " (via smtp)",
+                    "provider": "smtp", "raw": {"mx": host, **raw},
+                }
+            if label == VERIFIED and not partial:
+                break
+        _save_cache(cache)
+    except (OSError, smtplib.SMTPException) as exc:
+        notes.append(f"session with {host} failed ({type(exc).__name__}: {exc})")
+    finally:
+        _quietly_quit(server)
+    return _resolution(plan, probed, domain, notes)
+
+
+def _probe_rung(
+    emails: list[dict], first: str, last: str, domain: str
+) -> tuple[str, VerificationResult] | str:
+    """The keyless step of the resolution ladder, shared by resolve_address
+    and resolve_slate so the two can never disagree about it. Returns
+    (address, verification) or a string saying why not."""
+    probe = probe_patterns(first, last, domain)
+    if not probe.address:
+        return probe.reason
+    conflict = _name_conflict(emails, probe.address, first, last)
+    if conflict:
+        return conflict
+    result = verify_email(probe.address)  # cache hit from the probe itself
+    if result.should_block:
+        return f"keyless: {probe.address} was refused on re-check ({result.reason})"
+    if probe.partial:
+        return probe.address, VerificationResult(
+            email=probe.address, label=RISKY, score=None,
+            reason=probe.reason, raw=result.raw,
+        )
+    result.reason = f"{probe.reason}; {result.reason}"
+    return probe.address, result

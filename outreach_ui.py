@@ -449,11 +449,14 @@ function slateNote(c) {
   const rows = slate.map(s => {
     const chosen = s.name === c.contact_name ? "→ " : "&nbsp;&nbsp;&nbsp;";
     const addr = s.address ? ` · <span class="mail">${esc(s.address)}</span>` : "";
+    // A probed address came from the domain's own server, not Hunter —
+    // worth seeing, since a risky label there means "confirm the person".
+    const src = s.address_source === "probe" ? ` <span class="muted">(probe)</span>` : "";
     // An unverified-by-choice candidate arrives with an empty label
     // (resolve_candidate_slate maps DEFERRED to ""), so falsy means
     // "no verdict to show", not "unknown verdict".
     const label = s.verify_label ? ` · ${esc(s.verify_label)}` : "";
-    return `${chosen}<b>${esc(s.name)}</b> <span class="muted">${esc(s.role || "")}</span>${addr}${label}`;
+    return `${chosen}<b>${esc(s.name)}</b> <span class="muted">${esc(s.role || "")}</span>${addr}${src}${label}`;
   }).join("<br>");
   return `<div class="note small">Slate considered:<br>${rows}</div>`;
 }

@@ -118,9 +118,12 @@ python3 outreach_run.py verify-slate
 ```
 
 It returns each candidate with the address that would be used, where the
-address came from (the domain's own pattern, or Hunter's roster), and a
-verification verdict — one domain lookup for the whole slate, credits
-spent only until the first deliverable candidate.
+address came from (`pattern` — the domain's own pattern; `roster` —
+Hunter's per-address list; `probe` — the domain's own mail server said
+which conventional address exists, used whenever Hunter has no roster,
+which is every day its quota is dead), and a verification verdict — one
+domain lookup for the whole slate, credits spent only until the first
+deliverable candidate, probes free.
 
 **Show the user the resolved slate and let them choose** — name, role,
 evidence, confidence, address, and verification label per candidate,
@@ -220,7 +223,8 @@ the draft). Finalize re-verifies the chosen contact's address itself; the
 step 3 resolution was advisory.
 
 This lints the draft, resolves the real address from the domain's own
-pattern (or Hunter's roster), verifies it, refuses to draft if the address
+pattern (or Hunter's roster, or by asking the domain's mail server which
+conventional address exists), verifies it, refuses to draft if the address
 is undeliverable, appends the draft to Gmail with the résumé attached, and
 claims the company.
 
@@ -238,10 +242,14 @@ with a guessed address.
 
 Tell the user what landed in Gmail Drafts, the verified address and its
 label for each, and anything skipped and why. When a label is `catch_all`
-or `risky`, spell out what that means — the domain accepts anything, so
-nothing confirmed this particular mailbox — and that sending anyway,
-switching to an alternate from the slate, or discarding are all theirs to
-choose. Then stop. Reviewing and sending is theirs.
+or `risky`, spell out what that means, and that sending anyway, switching
+to an alternate from the slate, or discarding are all theirs to choose.
+`catch_all`: the domain accepts anything, so nothing confirmed this
+particular mailbox. `risky` from a `probe` source: the address exists,
+but only part of the name is in it (`first@` is the usual case), so a
+namesake at the company would match too — say "confirm the person" in
+those words; the reason also lists any other existing pattern. Then
+stop. Reviewing and sending is theirs.
 
 `python3 outreach_run.py status` shows pending drafts and contacted
 companies at any time.
@@ -302,7 +310,10 @@ information.
   stops spending at the first deliverable candidate, and finalize's
   re-verification of the chosen address is a cache hit.
   `python3 outreach_run.py verifiers` shows which providers can answer
-  right now — run it before a drain. If nothing can answer, drafts land
+  right now, and Hunter's reset date — run it before a drain. When
+  Hunter's search quota is gone, resolution falls to the keyless probe
+  automatically (source `probe`); only catch-all domains stay blocked
+  until the reset. If nothing can answer, drafts land
   labeled `unverified` — say so plainly in the report rather than
   treating it as verified.
 

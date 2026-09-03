@@ -82,7 +82,13 @@ to decide on its own.
     probe is provisional: Hunter, whose verdict draws on sources and
     bounce history rather than a live probe alone, gets a turn to sharpen
     it. An inconclusive answer passes to the next provider and is never
-    cached. Agent 2 gets only the label and the address — never raw
+    cached. Resolution itself has a keyless rung too (2026-09-02): when
+    Hunter has no roster for the domain, the conventional patterns for
+    the name are rendered and the domain's own server is asked which one
+    exists. A full-name hit keeps the probe's label; a partial-name hit
+    ({first}@, the small-company norm) is labeled risky with the namesake
+    caveat spelled out. Catch-all domains defeat every keyless route and
+    still need Hunter's roster. Agent 2 gets only the label and the address — never raw
     lookup data it doesn't need, with one deliberate window: Agent 1's
     `personalization_context`, a digest of public company facts the draft
     builds its bridge and its "something about them" line from (widened

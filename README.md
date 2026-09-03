@@ -125,7 +125,7 @@ flowchart TD
     S1["1 · Trigger<br/>fresh NY posting from an upstream tracker poller"]:::det
     S2["2 · Qualify<br/>hard eligibility rules in code + relevance-judge 0–100,<br/>cached, drift-checked by frozen anchors"]:::agent
     S3["3 · Find the contact — Agent 1<br/>ranked slate of up to 3 real people, per-candidate evidence"]:::agent
-    S4["4 · Verify the address<br/>Hunter domain-pattern resolution overrides agent inference"]:::det
+    S4["4 · Verify the address<br/>Hunter roster, else the domain's own mail server, resolves it — never agent inference"]:::det
     S5["5 · Draft — Agent 2<br/>writes from a curated research digest;<br/>never sees raw lookup data"]:::agent
     S6["6–7 · Review &amp; send<br/>IMAP-append to Gmail Drafts — this repo has no send path;<br/>a human reads and presses Send"]:::human
     S8["8 · Log<br/>company-level dedup, touch caps"]:::det

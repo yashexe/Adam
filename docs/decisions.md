@@ -434,3 +434,44 @@ credits again. Cost: a company on a domain that rejects
 unknown recipients now costs one Hunter credit (the roster) and no
 probe; a catch-all domain still costs one probe credit; the free tiers,
 when their keys exist, cover what is left.
+
+---
+
+**Address resolution asks the domain's own mail server when Hunter has no
+roster.** *(2026-09-02)*
+*Why:* the SMTP probe (previous entry) fixed verification, but the thing
+Hunter's quota death actually blocked was resolution: turning a named
+person into an address. `confirm_pattern` returned nothing with every
+counter at zero, and on 2026-09-01 three researched companies produced
+zero drafts because no candidate had an observed personal address. The
+same server that answers "does this mailbox exist" can answer "which of
+the conventional addresses for this name exists": render first.last,
+firstlast, first, f.last and the rest, RCPT each in one session, take
+the first hit. Benchmarked against 46 people Hunter's cached rosters
+attribute an address to: 14 exact matches, 7 hits on a full-name address
+that exists where Hunter lists a different one for the same person
+(aliases, most likely; none attributed to anyone else), 0 wrong-person
+hits, 1 miss, 3 unreachable (Proofpoint), 21 on catch-all domains where
+the server says yes to everything. Then the real test: the three
+companies blocked on 09-01 all resolved, in under seven seconds each,
+with zero credits.
+*Alternatives:* full-name patterns only (rejected — `{first}@` is the
+convention at 12 of the 18 cached rosters, so it would miss the
+small-company norm this pipeline exists for); trusting a partial-name
+hit as `verified` (rejected — the company-c wrong-person case was exactly
+a partial pattern labeled verified); waiting for the reset (rejected —
+it recurs monthly, and the drain that killed it was one morning's work).
+*Consequence:* `probe_patterns` and `_probe_rung` in `outreach/verify.py`,
+shared by `resolve_address` and `resolve_slate` so the advisory and
+binding resolutions cannot disagree. Ladder is now Hunter pattern →
+Hunter roster → keyless probe → observed fallback. Two tiers: full-name
+hits keep the probe's label; partial-name hits are `risky` with the
+reason "only part of the name is in it, so a namesake would match too —
+confirm the person before sending", and the reason lists any other
+existing pattern. `_name_conflict` still runs when a roster is cached.
+Every probed address is cached with its verdict, catch-all is cached per
+domain for a week, and an MX that drops the connection is remembered
+for a day (a Proofpoint slate cost 16 s per candidate before that).
+Residual dependency: catch-all domains, about a third of them and
+skewed to larger companies, still need Hunter's roster; the reset date
+now shows in `outreach_run.py verifiers`.

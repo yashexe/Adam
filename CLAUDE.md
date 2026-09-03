@@ -260,6 +260,26 @@ matches and correctly closed out a company via the prior-contact check
    send is now recorded). Full derivation: `docs/decisions.md` and
    `docs/agents.md`, "Agent 2 — the template collapse".
 
+12. **Hunter's quota death blocked all drafting** [FIXED 2026-09-02] —
+   every Hunter counter on the free plan hit zero on 2026-08-28 and again
+   before the 09-11 reset, and with no roster a named contact at a company
+   with no observed personal address was unresolvable: three researched
+   companies produced zero drafts on 2026-09-01. Two fixes, both keyless.
+   Mailbox verification now walks a provider chain fronted by a direct
+   SMTP probe from this Mac (`_verify_via_smtp`), benchmarked against all
+   40 addresses Hunter had labeled (21 identical, 16 catch-all from here
+   where Hunter's data still wins and gets the turn, 3 skips, 1
+   contradiction). And address resolution gained a keyless rung
+   (`probe_patterns`): render the conventional patterns for the name, ask
+   the domain's own server which exists. Full-name hits keep the probe's
+   label; partial-name hits (`{first}@`, the convention at 12 of 18 cached
+   rosters) are labeled `risky` with the namesake caveat spelled out, so
+   the review card says "confirm the person" rather than "verified".
+   Benchmarked against 46 roster-attributed people: 14 exact, 7 full-name
+   aliases, 0 wrong-person, 21 on catch-all domains where nothing keyless
+   can work. Catch-all domains still need Hunter's roster; that is the
+   residual dependency. Derivation: `docs/decisions.md`.
+
 The profile no longer blocks anything — it is hand-written in
 `qualify/profile.py` from the current resume, and Instaply's `parser.py` was
 not revived.
