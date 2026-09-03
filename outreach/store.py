@@ -83,6 +83,44 @@ CREATE TABLE IF NOT EXISTS outreach_log (
     -- fact that must never happen twice (docs/decisions.md, follow-up).
     follow_up_at    TEXT
 );
+
+-- A researched company that is not a draft. Since 2026-09-03 the
+-- unattended run researches and resolves a slate and then either drafts
+-- to rank one (clean address, score >= 70) or parks the company here for
+-- a human pick. Keyed on company_slug so prepare can skip it: without this
+-- row, every run would re-research the same company. Statuses: awaiting
+-- (needs a pick), approved (pick recorded, the next run drafts it),
+-- drafted (a claim exists in pending_outreach), dismissed (the human said
+-- no to this posting; a higher-scoring posting later re-opens it).
+CREATE TABLE IF NOT EXISTS slates (
+    company_slug        TEXT PRIMARY KEY,
+    platform            TEXT NOT NULL,
+    job_id              TEXT NOT NULL,
+    job_title           TEXT,
+    job_url             TEXT,
+    score               INTEGER,
+    domain              TEXT,
+    slate_json          TEXT NOT NULL,
+    resolved_json       TEXT,
+    observed_address    TEXT,
+    source_notes        TEXT,
+    personalization_json TEXT,
+    status              TEXT NOT NULL DEFAULT 'awaiting',
+    chosen_name         TEXT,
+    reason              TEXT,
+    created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at          TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Slugs that are not companies: a recruiting marketplace with hundreds of
+-- postings under one slug, a staffing agency. Not a fit filter (fit is the
+-- judge's job and stays broad) -- a note that there is nobody to email.
+-- Added by a human, by hand, with a reason; prepare skips them and says so.
+CREATE TABLE IF NOT EXISTS company_ignore (
+    company_slug    TEXT PRIMARY KEY,
+    reason          TEXT NOT NULL,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
 """
 
 # CREATE TABLE IF NOT EXISTS cannot add columns to a table that already
@@ -422,3 +460,133 @@ def discarded() -> list[sqlite3.Row]:
             "SELECT * FROM pending_outreach WHERE status=? ORDER BY updated_at DESC",
             (DISCARDED,),
         ).fetchall()
+
+
+# ── Slates awaiting a pick, and slugs that are not companies ─────────────
+# Added 2026-09-03 for the unattended run (docs/decisions.md). Every
+# transition is a plain UPDATE on the slug; nothing here sends or drafts.
+
+SLATE_AWAITING = "awaiting"
+SLATE_APPROVED = "approved"
+SLATE_DRAFTED = "drafted"
+SLATE_DISMISSED = "dismissed"
+
+
+def save_slate(
+    *, company_slug: str, platform: str, job_id: str, job_title: str | None,
+    job_url: str | None, score: int | None, domain: str | None,
+    slate_json: str, resolved_json: str | None, observed_address: str | None,
+    source_notes: str | None, personalization_json: str | None,
+    status: str = SLATE_AWAITING, reason: str | None = None,
+) -> None:
+    """Record a researched, resolved slate. Replaces any earlier row for the
+    company: a slate is the latest research, not a history."""
+    conn = connect()
+    conn.execute(
+        """INSERT INTO slates (company_slug, platform, job_id, job_title, job_url,
+                score, domain, slate_json, resolved_json, observed_address,
+                source_notes, personalization_json, status, reason)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(company_slug) DO UPDATE SET
+                platform=excluded.platform, job_id=excluded.job_id,
+                job_title=excluded.job_title, job_url=excluded.job_url,
+                score=excluded.score, domain=excluded.domain,
+                slate_json=excluded.slate_json, resolved_json=excluded.resolved_json,
+                observed_address=excluded.observed_address,
+                source_notes=excluded.source_notes,
+                personalization_json=excluded.personalization_json,
+                status=excluded.status, reason=excluded.reason,
+                chosen_name=NULL, updated_at=datetime('now')""",
+        (company_slug, platform, job_id, job_title, job_url, score, domain,
+         slate_json, resolved_json, observed_address, source_notes,
+         personalization_json, status, reason),
+    )
+    conn.commit()
+    conn.close()
+
+
+def slate_row(company_slug: str) -> sqlite3.Row | None:
+    conn = connect()
+    row = conn.execute("SELECT * FROM slates WHERE company_slug = ?", (company_slug,)).fetchone()
+    conn.close()
+    return row
+
+
+def slates(status: str | None = None) -> list[sqlite3.Row]:
+    conn = connect()
+    if status:
+        rows = conn.execute("SELECT * FROM slates WHERE status = ? ORDER BY score DESC, created_at",
+                            (status,)).fetchall()
+    else:
+        rows = conn.execute("SELECT * FROM slates ORDER BY status, score DESC, created_at").fetchall()
+    conn.close()
+    return rows
+
+
+def _set_slate(company_slug: str, status: str, *, chosen_name: str | None = None,
+               reason: str | None = None) -> sqlite3.Row:
+    conn = connect()
+    row = conn.execute("SELECT * FROM slates WHERE company_slug = ?", (company_slug,)).fetchone()
+    if row is None:
+        conn.close()
+        raise KeyError(f"no slate for {company_slug}")
+    conn.execute(
+        "UPDATE slates SET status = ?, chosen_name = COALESCE(?, chosen_name), "
+        "reason = COALESCE(?, reason), updated_at = datetime('now') WHERE company_slug = ?",
+        (status, chosen_name, reason, company_slug),
+    )
+    conn.commit()
+    row = conn.execute("SELECT * FROM slates WHERE company_slug = ?", (company_slug,)).fetchone()
+    conn.close()
+    return row
+
+
+def approve_slate(company_slug: str, chosen_name: str) -> sqlite3.Row:
+    """The human picked. The next run drafts to this person, no research."""
+    return _set_slate(company_slug, SLATE_APPROVED, chosen_name=chosen_name)
+
+
+def dismiss_slate(company_slug: str, reason: str | None = None) -> sqlite3.Row:
+    return _set_slate(company_slug, SLATE_DISMISSED, reason=reason)
+
+
+def mark_slate_drafted(company_slug: str) -> None:
+    """Called by finalize when a claim lands; harmless if no slate exists."""
+    conn = connect()
+    conn.execute("UPDATE slates SET status = ?, updated_at = datetime('now') "
+                 "WHERE company_slug = ?", (SLATE_DRAFTED, company_slug))
+    conn.commit()
+    conn.close()
+
+
+def delete_slate(company_slug: str) -> None:
+    conn = connect()
+    conn.execute("DELETE FROM slates WHERE company_slug = ?", (company_slug,))
+    conn.commit()
+    conn.close()
+
+
+def ignore_company(company_slug: str, reason: str) -> None:
+    conn = connect()
+    conn.execute(
+        "INSERT INTO company_ignore (company_slug, reason) VALUES (?, ?) "
+        "ON CONFLICT(company_slug) DO UPDATE SET reason = excluded.reason",
+        (company_slug, reason),
+    )
+    conn.commit()
+    conn.close()
+
+
+def unignore_company(company_slug: str) -> None:
+    conn = connect()
+    conn.execute("DELETE FROM company_ignore WHERE company_slug = ?", (company_slug,))
+    conn.commit()
+    conn.close()
+
+
+def ignored() -> dict[str, str]:
+    """slug -> reason."""
+    conn = connect()
+    rows = conn.execute("SELECT company_slug, reason FROM company_ignore").fetchall()
+    conn.close()
+    return {r["company_slug"]: r["reason"] for r in rows}

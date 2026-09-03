@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The unattended trigger: every five minutes, bin/tick.py asks the Pi for
+  new postings and, when enough have waited, launches one bounded headless
+  outreach run (docs/decisions.md, 2026-09-03). Drafts land in Gmail;
+  nothing sends. The Mac has to be awake; launchd runs missed intervals
+  on wake.
+
+  Install (deliberately by hand, like the UI agent):
+      cp com.yash.adam-tick.plist ~/Library/LaunchAgents/
+      launchctl load ~/Library/LaunchAgents/com.yash.adam-tick.plist
+
+  Stop / uninstall:
+      launchctl unload ~/Library/LaunchAgents/com.yash.adam-tick.plist
+
+  Watch it:
+      tail -f .cache/unattended/tick.log
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.yash.adam-tick</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/homebrew/bin/python3</string>
+        <string>/Users/yashbhavsar/Code/Adam/bin/tick.py</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/yashbhavsar/Code/Adam</string>
+
+    <key>StartInterval</key>
+    <integer>300</integer>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- The claude binary and ssh need the user's PATH, not launchd's. -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/Users/yashbhavsar/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/Users/yashbhavsar/Code/Adam/.cache/unattended/launchd.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/yashbhavsar/Code/Adam/.cache/unattended/launchd.log</string>
+</dict>
+</plist>

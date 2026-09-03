@@ -133,7 +133,23 @@ def prepare(
         )
 
     out: list[Candidate] = []
+    ignored = store.ignored()
     for slug, cand in best.items():
+        if slug in ignored:
+            skipped.append(f"{slug}: ignored — {ignored[slug]}")
+            continue
+        slate = store.slate_row(slug)
+        if slate is not None and slate["status"] in (store.SLATE_AWAITING, store.SLATE_APPROVED):
+            skipped.append(f"{slug}: slate {slate['status']} since {slate['created_at']} "
+                           f"— pick or dismiss it rather than re-researching")
+            continue
+        if slate is not None and slate["status"] == store.SLATE_DISMISSED:
+            if cand.score <= (slate["score"] or 0):
+                skipped.append(f"{slug}: slate dismissed {slate['updated_at']} "
+                               f"({slate['reason'] or 'no reason given'}); a higher-scoring "
+                               f"posting would re-open it")
+                continue
+            store.delete_slate(slug)  # a better posting re-opens the company
         state, existing = store.claim_state(slug)
         if state == "sent":
             skipped.append(f"{slug}: already contacted {existing['sent_at']}")
@@ -483,6 +499,7 @@ def finalize(
         )
 
     create_draft(to=email, subject=subject, body=body, verification=verification)
+    store.mark_slate_drafted(slug)  # no-op unless the unattended run parked one
 
     store.record_draft(
         company_slug=slug, platform=candidate.platform, job_id=candidate.job_id,

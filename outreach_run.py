@@ -10,6 +10,13 @@ Outreach pipeline CLI — the deterministic half.
     python3 outreach_run.py bump <company>           # draft that follow-up (body on stdin)
     python3 outreach_run.py discard <company>        # draft got deleted in Gmail, release the claim
     python3 outreach_run.py verifiers                # which verification providers can answer right now
+    python3 outreach_run.py ignore <slug> "<reason>" # this slug is not a company (marketplace, agency)
+    python3 outreach_run.py slates                   # researched companies awaiting a pick
+    python3 outreach_run.py slate approve <slug> "<name>" | dismiss <slug> ["<reason>"]
+    python3 outreach_run.py tick [--since "YYYY-MM-DD HH:MM:SS"]   # the 5-minute check: prints fire|idle
+    python3 outreach_run.py budget                   # what an unattended run may spend right now
+    python3 outreach_run.py unattended-start <slug>  # the run is about to research this company
+    python3 outreach_run.py run-done --status ok|fail|timeout [--summary-file F]
     python3 outreach_run.py verify <email>           # one address through the chain (smoke-test a new key)
 
 Stages 3 and 5 are agent calls and are not driven from here — the
@@ -373,6 +380,101 @@ def cmd_verify(args: argparse.Namespace) -> int:
     return 2 if result.should_block else 0
 
 
+def cmd_ignore(args: argparse.Namespace) -> int:
+    """Record that a slug is not a company to email. A human decision with a
+    reason, not a fit filter: fit stays the judge's, and stays broad."""
+    if args.remove:
+        store.unignore_company(args.slug)
+        print(f"{args.slug}: no longer ignored")
+        return 0
+    if not args.reason:
+        print("error: a reason is required (it is shown every time prepare skips the slug)",
+              file=sys.stderr)
+        return 1
+    store.ignore_company(args.slug, args.reason)
+    print(f"{args.slug}: ignored — {args.reason}")
+    return 0
+
+
+def cmd_slates(args: argparse.Namespace) -> int:
+    """Researched companies parked for a human pick, plus their history."""
+    rows = [dict(r) for r in store.slates(args.status)]
+    if args.json:
+        print(json.dumps(rows, indent=2))
+        return 0
+    if not rows:
+        print("no slates" + (f" with status {args.status}" if args.status else ""))
+        return 0
+    print(f"\n{'STATUS':<10} {'SCORE':>5}  {'COMPANY':<18}  TITLE / CANDIDATES")
+    print("-" * 92)
+    for r in rows:
+        print(f"{r['status']:<10} {str(r['score']):>5}  {r['company_slug'][:18]:<18}  {(r['job_title'] or '')[:50]}")
+        try:
+            resolved = json.loads(r["resolved_json"] or "[]")
+        except json.JSONDecodeError:
+            resolved = []
+        for c in resolved:
+            mark = "→ " if c.get("name") == r["chosen_name"] else "  "
+            label = c.get("verify_label") or "unresolved"
+            addr = c.get("address") or "-"
+            print(f"{'':<10} {'':>5}  {'':<18}  {mark}{c.get('name','?')} ({c.get('role','?')}) — {addr} [{label}]")
+        if r["reason"]:
+            print(f"{'':<10} {'':>5}  {'':<18}  note: {r['reason']}")
+    print()
+    return 0
+
+
+def cmd_slate(args: argparse.Namespace) -> int:
+    """approve <slug> <name>: the human picked; the next run drafts it.
+    dismiss <slug> [reason]: not this posting; a better one re-opens it."""
+    try:
+        if args.action == "approve":
+            if not args.name:
+                print("error: approve needs the chosen candidate's name", file=sys.stderr)
+                return 1
+            row = store.approve_slate(args.slug, args.name)
+        else:
+            row = store.dismiss_slate(args.slug, args.name)
+    except KeyError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    print(json.dumps({"company_slug": row["company_slug"], "status": row["status"],
+                      "chosen_name": row["chosen_name"], "reason": row["reason"]}, indent=2))
+    return 0
+
+
+def cmd_tick(args: argparse.Namespace) -> int:
+    from outreach import unattended
+    verdict, reason = unattended.tick(since=args.since)
+    print(verdict)
+    print(reason, file=sys.stderr)
+    return 0
+
+
+def cmd_budget(args: argparse.Namespace) -> int:
+    from outreach import unattended
+    print(json.dumps(unattended.budget(), indent=2))
+    return 0
+
+
+def cmd_unattended_start(args: argparse.Namespace) -> int:
+    from outreach import unattended
+    print(json.dumps(unattended.start_company(args.slug), indent=2))
+    return 0
+
+
+def cmd_run_done(args: argparse.Namespace) -> int:
+    from outreach import unattended
+    summary = None
+    if args.summary_file:
+        try:
+            summary = open(args.summary_file).read()
+        except OSError:
+            summary = None
+    print(json.dumps(unattended.run_done(None, args.status, summary), indent=2))
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -425,6 +527,39 @@ def main() -> int:
     ve.add_argument("email")
     ve.add_argument("--fresh", action="store_true", help="ignore a cached answer")
     ve.set_defaults(func=cmd_verify)
+
+    ig = sub.add_parser("ignore", help="mark a slug as not-a-company (marketplace, agency)")
+    ig.add_argument("slug")
+    ig.add_argument("reason", nargs="?", default="")
+    ig.add_argument("--remove", action="store_true", help="stop ignoring the slug")
+    ig.set_defaults(func=cmd_ignore)
+
+    sl = sub.add_parser("slates", help="researched companies awaiting a human pick")
+    sl.add_argument("--status", choices=["awaiting", "approved", "drafted", "dismissed"])
+    sl.add_argument("--json", action="store_true")
+    sl.set_defaults(func=cmd_slates)
+
+    sa = sub.add_parser("slate", help="approve <slug> <name> | dismiss <slug> [reason]")
+    sa.add_argument("action", choices=["approve", "dismiss"])
+    sa.add_argument("slug")
+    sa.add_argument("name", nargs="?", help="chosen candidate (approve) or reason (dismiss)")
+    sa.set_defaults(func=cmd_slate)
+
+    tk = sub.add_parser("tick", help="the 5-minute unattended check; prints fire or idle")
+    tk.add_argument("--since", help="reset the watermark (tracker format, UTC) to back-fill")
+    tk.set_defaults(func=cmd_tick)
+
+    bg = sub.add_parser("budget", help="what an unattended run may spend right now")
+    bg.set_defaults(func=cmd_budget)
+
+    us = sub.add_parser("unattended-start", help="count a company against today's budget")
+    us.add_argument("slug")
+    us.set_defaults(func=cmd_unattended_start)
+
+    rd = sub.add_parser("run-done", help="the wrapper reports how an unattended run ended")
+    rd.add_argument("--status", required=True, choices=["ok", "fail", "timeout", "stale"])
+    rd.add_argument("--summary-file")
+    rd.set_defaults(func=cmd_run_done)
 
     args = parser.parse_args()
     return args.func(args)
