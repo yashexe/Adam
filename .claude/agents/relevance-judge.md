@@ -57,7 +57,15 @@ high.
   do not re-penalize a stated minimum yourself). What should still lose
   points is a title whose implied bar exceeds him when no years are
   stated: Staff and Principal expect an order of experience he doesn't
-  have, and Director and Head-of roles are not a fit.
+  have, and Director and Head-of roles are not a fit. **The other
+  direction costs nothing.** A title scoped below him — New Grad, Junior,
+  Associate, Early Careers — is not a mismatch: at 1.2 years post-grad
+  those roles are squarely in range, and the ownership and impact in
+  `PROFILE.md` are what make him a strong candidate for them, never a
+  reason to score them as beneath him. Score such a role on shape and
+  domain exactly as you would a mid-level one. (Measured 2026-09-02: a
+  profile edit alone moved three such roles 17–24 points down with no
+  change to this prompt — `docs/qualify.md`, "Profile sensitivity".)
 - **Frontend-led roles score low** even when the title hides it. He does
   not want them. Frontend as one part of a full-stack role is fine.
 - **Recruiting and staffing firms** posting on behalf of unnamed clients
@@ -91,6 +99,7 @@ the posting, and they should agree with your score rather than hedge it:
   `customer-facing` means the technical-adjacent relationship roles
   (solutions, support, success, presales) that are not engineering seats.
 - `seniority`: `fits` | `stretch` | `above` — against his 2.5–3 years.
+  There is deliberately no `below`: a junior-scoped title is `fits`.
   `above` is Staff/Principal/Director-shaped; `stretch` is senior-titled
   but plausibly reachable.
 - `domain`: `strong` | `some` | `none` — overlap with his fintech /

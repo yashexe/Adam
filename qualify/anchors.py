@@ -26,6 +26,11 @@ cache so they can never drift or expire out from under the calibration.
 - low: company-m's Senior Field Marketing Manager posting -- clearly
   not an engineering role (a marketing role at a company whose FDE posting
   is the high anchor, so company prestige cancels out).
+- newgrad: company-an's Software Engineer New Grad posting -- squarely
+  in-range fintech infrastructure work behind a junior title (judged 74
+  before the 2026-09-02 profile edit, 50 after). Watches the one
+  dimension the other three cannot: whether the judge has started
+  scoring junior-scoped roles as beneath him.
 """
 
 from __future__ import annotations
@@ -181,6 +186,63 @@ ANCHORS: list[dict] = [
             "nce - Understand the current vendor and agency landscape \u2014 who exists, w"
             "hat contracts are in place, what's worked and what hasn't - Learn company-m"
             "'s brand guidelines, event standards, and messaging framework from the B"
+        ),
+    },
+    {
+        # Added 2026-09-02 after a profile edit alone moved three junior-titled
+        # postings 17-24 points down (docs/qualify.md, "Profile sensitivity").
+        # None of the three anchors above is junior-titled, so that dimension
+        # was invisible to them. This is a real new-grad posting at a fintech
+        # infrastructure company (company-an), judged 74 before the edit and
+        # 50 after; the band is where it belongs with the prompt's "scoped
+        # below him costs nothing" rule in place.
+        "name": "newgrad-in-range",
+        "job_title": "Software Engineer New Grad",
+        "company_slug": "company-an",
+        "expect": (55, 90),
+        "description_text": (
+            "ABOUT THE COMPANY company-an is building the AI-native operating system "
+            "for regulated finance, starting with mortgage servicing. We're a Series "
+            "C company backed by a16z, transforming industries that others have writt"
+            "en off as too complex to innovate. Rather than build on top of broken le"
+            "gacy systems, we took a different approach: we built and operate our own"
+            " mortgage servicing business managing $110+ billion in loans. This wasn'"
+            "t the end goal, it was how we deeply understood the complexity needed to"
+            " build software that actually works in regulated industries. The results"
+            " speak for themselves. We've transformed mortgage servicing from a 0% ma"
+            "rgin business into 60%+ margins while dramatically improving customer ex"
+            "perience. Major enterprise contracts are now deploying across the indust"
+            "ry. company-an OS is our unified platform that makes every process struc"
+            "tured and programmable and it is perfectly positioned for the AI era. Wh"
+            "en everything flows through one system with rich data, AI agents don't j"
+            "ust automate tasks, they continuously improve entire operations. Mortgag"
+            "e servicing is just the beginning of our vision to transform regulated i"
+            "ndustries and beyond. ENGINEERING AT company-an Our engineering team is "
+            "here to power the software ecosystem to disrupt one of the most outdated"
+            " and regulated spaces in the financial sector - the mortgage industry. W"
+            "e\u2019ve built out the foundation of a modern mortgage servicing platform th"
+            "at can accurately handle billions of dollars at scale, but we\u2019re just ge"
+            "tting started. At company-an, we want you to do the best work of your li"
+            "fe. You'll be surrounded by a tight-knit community of exceptional people"
+            " from places like Stripe, Jane Street, Meta, and Google who care deeply "
+            "about their work and each other. Our problem space is complex, but you\u2019l"
+            "l get a lot of autonomy so that you can learn quickly, execute effective"
+            "ly, and deliver the highest level of business impact. Our tech stack is "
+            "built on Python, React, Docker, Kubernetes, and Google Cloud Platform. O"
+            "ur office locations are based in New York City and in San Francisco. RES"
+            "PONSIBILITIES - Learn new concepts and technologies quickly and apply th"
+            "em to challenging problems - Design and build robust and extensible infr"
+            "astructure to handle evolving and complex federal, state, and agency reg"
+            "ulations - Dive deep to understand the inner workings of a highly comple"
+            "x industry - Work with Product and Design to define the best experience "
+            "for our customers IDEAL BACKGROUND - 0-1 year of software engineering ex"
+            "perience building quality software applications at scale - Bachelor's de"
+            "gree in Computer Science or related field - Strong communicator. Able to"
+            " work cross-functionally to balance product and technical requirements -"
+            " Great at building scalable systems from scratch with a fast turnaround "
+            "- Experience with one or more of the following: web application developm"
+            "ent, mobile application development, building large-scale distributed sy"
+            "stems, or infrastructure management - Time manag"
         ),
     },
 ]

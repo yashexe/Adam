@@ -210,7 +210,7 @@ matches and correctly closed out a company via the prior-contact check
    ground truth ordered 7/7 on the judge alone, and judge test-retest
    stability measured +0.97. `qualify/scorer.py` deleted; the
    relevance-judge's 0-100 IS the QUALIFY score; the judge reads 3000
-   chars, returns a shape/seniority/domain rubric, and three frozen
+   chars, returns a shape/seniority/domain rubric, and four frozen
    anchor postings in every batch turn drift into a warning instead of a
    silent reordering. Eligibility, extraction-as-metadata, and dedup stay
    deterministic. Corpus re-judged (303 postings), tiers on the judge's

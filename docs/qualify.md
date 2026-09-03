@@ -31,7 +31,7 @@ management / non-engineering), `seniority` (fits / stretch / above),
 `domain` (strong / some / none) — plus a one-line `reason`, so ranking
 and review surfaces show *why* without re-reading the posting.
 
-Three frozen calibration postings (`qualify/anchors.py`) ride unlabelled
+Four frozen calibration postings (`qualify/anchors.py`) ride unlabelled
 in every judge batch: an interview-ground-truth FDE posting (expected
 75-100), an adjacent DevOps/SRE posting (35-70), and a marketing posting
 (0-25). `judge-save` warns when an anchor lands outside its band — the
@@ -675,7 +675,7 @@ same day. The evidence, all on real data:
   a structured rubric (shape / seniority / domain / reason) alongside
   the score, so review surfaces stay explainable without a composite
   breakdown.
-- `qualify/anchors.py`: three frozen calibration postings ride
+- `qualify/anchors.py`: four frozen calibration postings ride
   unlabelled in every batch; `judge-save` warns when one scores outside
   its known band. This is the mitigation for the new single point of
   failure — a drifted judge announces itself instead of silently
@@ -822,3 +822,19 @@ and at 1.2 years post-grad those roles are legitimately in play (one of
 the three was a live target that week). If they should stay in range, a
 one-line addition to the judge prompt fixes it. The cache keeps the
 pre-change scores; nothing here was saved.
+
+**With the fix, same day.** The judge prompt gained the missing direction
+(a title scoped below him is not a mismatch and costs nothing; the
+rubric deliberately has no `below`), and a fourth anchor was added —
+`newgrad-in-range`, a real new-grad fintech posting aliased as company-an,
+band 55–90 — so this dimension is watched from now on. The same 22 were
+re-judged with the four anchors. The junior-titled roles, as cached →
+after the profile edit → with the fix: the mortgage-servicing new-grad
+backend role 74→50→81; the payments junior full-stack role 72→55→71;
+the payments-infrastructure new-grad program 58→45→80; the associate
+full-stack role 30→22→28 (frontend-led, correctly low). Anchors came back 92 / 50 /
+4 / 80, all in band. Against the cached scores the whole set now sits at
+Spearman +0.96 with 18 of 22 inside the jitter band; the only
+roles still below their cached score by more than jitter are the PHP/Vue
+one (stack mismatch, 70→52) and the RL post-training one (42, vs 25
+cached — up, not down). The junior demotion is gone.
