@@ -5,8 +5,16 @@ ashby-ny-tracker's `tracker.db` is the only copy that matters and it lives
 at /home/pi/ashby-ny-tracker/tracker.db (the checkout on this Mac has its
 own stale `tracker.db` — do not read that one). Access is strictly
 read-only over SSH via `?mode=ro`, the pattern PI.md already uses for
-health checks: it takes no lock that can collide with the 10-minute poll
-cycle, and this stage writes nothing back.
+health checks, and this stage writes nothing back. Read-only was not
+lock-free, though: until 2026-09-03 tracker.db was in rollback-journal
+mode, so this query held a SHARED lock for its 2-6 s (an unindexed scan
+of `seen_jobs`) and the poll's commit gave up after 5 s -- two polls
+crashed with "database is locked" that morning under back-to-back reads
+from here. Fixed on the Pi the same day (tracker commit aa42c00): WAL
+mode, so a reader never blocks the poll's commit; a 30 s lock timeout as
+backstop; and an index on `first_seen_at`. The tick is still pinned to
+:02:30 of each slot as belt and braces, not because a collision would
+break anything now.
 
 `seen_jobs` records every posting from every board, not just matches — the
 NY/role/freshness filter is applied to `pending_alerts`, which is cleared

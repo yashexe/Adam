@@ -71,6 +71,11 @@ def notify(title: str, text: str) -> None:
 
 def main() -> int:
     dry = "--dry-run" in sys.argv
+    # launchd fires at :02 of each five-minute slot (see the plist); the
+    # extra delay puts the Pi read at :02:30, clear of the poll's writes.
+    delay = float(os.getenv("ADAM_TICK_DELAY_SECONDS") or 0)
+    if delay > 0 and not dry:
+        time.sleep(delay)
     tick = run_cli("tick")
     verdict = (tick.stdout.strip().splitlines() or ["idle"])[0]
     reason = tick.stderr.strip()

@@ -350,8 +350,9 @@ python3 outreach_run.py tick                        # the 5-minute unattended ch
 ```
 
 Unattended, since 2026-09-03: `bin/tick.py` (run by
-`com.yash.adam-tick.plist` every five minutes, installed by hand) asks the
-Pi for new postings and, when enough have waited, launches one bounded
+`com.yash.adam-tick.plist` at :02:30 of every five-minute slot, installed
+by hand; the offset keeps its read clear of the Pi's :00 poll, whose
+commit a slow read can lock out) asks the Pi for new postings and, when enough have waited, launches one bounded
 headless run of the `outreach` skill — judge, research, resolve, draft to
 rank one when the address is clean, park the slate otherwise. Three
 companies per run, eight per day, counted in code. Drafts land in Gmail

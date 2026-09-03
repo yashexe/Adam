@@ -6,6 +6,14 @@
   nothing sends. The Mac has to be awake; launchd runs missed intervals
   on wake.
 
+  Timing is deliberate: the Pi's poll writes tracker.db from :00 to about
+  :01:20 of every five-minute slot, and a read from here holds a shared
+  lock the poll's commit cannot wait out (it crashed twice on 2026-09-03).
+  So the tick is pinned to :02 of each slot by calendar rather than a
+  drifting 300-second interval, and tick.py sleeps a further 30 seconds,
+  landing the read at :02:30 -- the poll long finished, the next one
+  two and a half minutes away.
+
   Install (deliberately by hand, like the UI agent):
       cp com.yash.adam-tick.plist ~/Library/LaunchAgents/
       launchctl load ~/Library/LaunchAgents/com.yash.adam-tick.plist
@@ -30,8 +38,21 @@
     <key>WorkingDirectory</key>
     <string>/Users/yashbhavsar/Code/Adam</string>
 
-    <key>StartInterval</key>
-    <integer>300</integer>
+    <key>StartCalendarInterval</key>
+    <array>
+        <dict><key>Minute</key><integer>2</integer></dict>
+        <dict><key>Minute</key><integer>7</integer></dict>
+        <dict><key>Minute</key><integer>12</integer></dict>
+        <dict><key>Minute</key><integer>17</integer></dict>
+        <dict><key>Minute</key><integer>22</integer></dict>
+        <dict><key>Minute</key><integer>27</integer></dict>
+        <dict><key>Minute</key><integer>32</integer></dict>
+        <dict><key>Minute</key><integer>37</integer></dict>
+        <dict><key>Minute</key><integer>42</integer></dict>
+        <dict><key>Minute</key><integer>47</integer></dict>
+        <dict><key>Minute</key><integer>52</integer></dict>
+        <dict><key>Minute</key><integer>57</integer></dict>
+    </array>
 
     <key>RunAtLoad</key>
     <true/>
@@ -41,6 +62,9 @@
     <dict>
         <key>PATH</key>
         <string>/Users/yashbhavsar/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+        <!-- launchd schedules to the minute; this lands the read at :02:30. -->
+        <key>ADAM_TICK_DELAY_SECONDS</key>
+        <string>30</string>
     </dict>
 
     <key>StandardOutPath</key>

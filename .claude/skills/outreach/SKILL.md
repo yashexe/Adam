@@ -388,8 +388,15 @@ prepare, so nothing is ever researched twice.
   `python3 outreach_run.py verifiers` shows which providers can answer
   right now, and Hunter's reset date — run it before a drain. When
   Hunter's search quota is gone, resolution falls to the keyless probe
-  automatically (source `probe`); only catch-all domains stay blocked
-  until the reset. If nothing can answer, drafts land
+  automatically (source `probe`); the probe cannot read catch-all or
+  firewalled domains, which is most of the large companies that clear the
+  spend bar (measured 2026-09-03: 7 of 8 in one day). A last rung,
+  `APOLLO_API_KEY` in `.env`, tries Apollo's person-enrichment endpoint
+  for exactly those (source `apollo`) — free tier, credit-capped, spent
+  only once per company (the first still-unresolved candidate in a slate,
+  never an alternate once someone resolves). Trusted at `verified`
+  without a re-probe, since Apollo's own data is the thing a catch-all
+  domain's server cannot supply. If nothing can answer, drafts land
   labeled `unverified` — say so plainly in the report rather than
   treating it as verified.
 

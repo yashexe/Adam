@@ -518,3 +518,38 @@ says so when it skips one). Companies already in process through another
 channel are closed in the store by hand so the run cannot email them.
 Notion is untouched by the run: rows are for responses, never for
 unanswered outreach (Yash, 2026-09-02).
+
+---
+
+**The tick reads the Pi at :02:30, never on the poll's beat.**
+*(2026-09-03)*
+*Why:* two tracker polls crashed the same morning with `database is
+locked`, and both were this Mac's doing. `tracker.db` is in
+rollback-journal mode, so even a `mode=ro` connection holds a SHARED lock
+for the length of its query, and the candidates query is an unindexed
+scan of 418k `seen_jobs` rows: 2.5 s for seven days, about 6 s for 30 or
+60. The poll's commit waits five seconds and gives up. The first crash
+sat under three back-to-back 30/60-day reads from a chat session; the
+second was a timing measurement that started two seconds into the next
+poll. A crashed poll costs nothing durable (the next one re-reads the
+boards) but sends the tracker's crash email and delays that slot's
+matches five minutes. The `StartInterval` schedule drifted a second or
+two per cycle and would have walked the tick into the poll window on its
+own within a couple of hours.
+*Alternatives:* raise the poll's SQLite timeout to 30 s in the tracker
+(the complete fix, since it also covers hand-run commands, but a change
+to the other repo on the Pi; still worth doing); an index on
+`first_seen_at` or WAL mode on the Pi (same objection); `immutable=1` on
+the reader (no lock at all, but SQLite then trusts the file not to change
+under it, which is exactly false mid-poll).
+*Consequence:* `com.yash.adam-tick.plist` uses `StartCalendarInterval` at
+minutes 2, 7, ... 57, and `bin/tick.py` sleeps `ADAM_TICK_DELAY_SECONDS`
+(30, set in the plist) before its read, so the tick lands at :02:30 -- the
+poll finishes by about :01:30, the next starts at :05:00. The same
+day the tracker itself was fixed (ashby-ny-tracker commit aa42c00,
+deployed 10:31): `tracker.db` switched to WAL mode, the poll's connection
+waits 30 s instead of 5, and `seen_jobs(first_seen_at)` gained an index.
+WAL is the fix that covers hand-run commands and any future reader; the
+tick offset stays as belt and braces. The docstring in
+`qualify/candidates.py` records both and no longer claims the read is
+lock-free.
