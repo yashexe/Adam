@@ -295,6 +295,20 @@ matches and correctly closed out a company via the prior-contact check
    gates are untouched: picking is a button in the review UI, sending is
    Gmail. Derivation: `docs/decisions.md`.
 
+14. **The residual dependency hit on the pipeline's first live day**
+   [FIXED 2026-09-03] — the first unattended run spent its whole daily
+   budget on seven companies, all catch-all or firewalled, all parked
+   with no address: exactly item 12's gap, showing up immediately rather
+   than eventually. Verifiers answer "does this mailbox exist"; the real
+   need was a second *source* of addresses, since Hunter's is dead until
+   the 11th. Apollo's person-enrichment endpoint (free tier) answers a
+   different question — "what is this named person's email, per Apollo's
+   own data" — which works precisely where a live probe cannot. Added as
+   the resolution ladder's last rung (`outreach/verify.py`), gated to one
+   credit per company, name-conflict-checked like every other rung.
+   Untested until a real key exists, written from the documented request
+   shape; the review is `docs/decisions.md`.
+
 The profile no longer blocks anything — it is hand-written in
 `qualify/profile.py` from the current resume, and Instaply's `parser.py` was
 not revived.

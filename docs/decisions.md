@@ -553,3 +553,52 @@ WAL is the fix that covers hand-run commands and any future reader; the
 tick offset stays as belt and braces. The docstring in
 `qualify/candidates.py` records both and no longer claims the read is
 lock-free.
+
+---
+
+**A second address source for the domains a live probe cannot read.**
+*(2026-09-03)*
+*Why:* the unattended run's first live day spent its entire daily budget
+on seven companies — Kalshi, DeepL, TripleLift, GLG, Rocket Money,
+fuboTV, Industrious — every one catch-all or sitting behind Cisco
+IronPort, Mimecast, or Proofpoint, and every one parked with zero drafts.
+Not a bug: the keyless probe correctly refuses to guess on a domain that
+accepts any address, and correctly cannot reach a domain that refuses
+its connection. But it meant the residual dependency named the same day
+(previous entry, item 12) showed up on 7 of 8 companies within hours of
+going live, not eventually. A verifier cannot fix this — it confirms an
+address already in hand, and the problem here is having none. What
+answers "what is this named person's email" on a domain a probe cannot
+read is a second *source*: Apollo's person-enrichment endpoint
+(people/match), free tier, which returns Apollo's own sourced email for
+a given name and domain rather than asking the domain's server anything.
+Apollo's domain-wide roster (organization search, the thing that would
+replace confirm_pattern outright) is paid-only; person-by-person
+enrichment is not.
+*Alternatives:* raising the daily cap (rejected — would only research
+more companies that hit the identical wall); a paid Hunter tier
+(rejected — Yash's standing call); waiting for the 09-11 reset
+(rejected — recurs monthly, and the gap was visible in one day);
+rendering the pattern from a data-broker address the way `resolve_slate`
+already refuses to (not this decision — a possible future one, not
+built).
+*Consequence:* `_apollo_match` / `_apollo_rung` in `outreach/verify.py`,
+the resolution ladder's last rung in both `resolve_address` and
+`resolve_slate`, after pattern, roster and probe have all failed. Costs
+one Apollo credit per company: `resolve_slate` gates it behind
+`have_verified` exactly as it already gates paid mailbox verification,
+so an alternate candidate is never charged once someone on the slate has
+resolved. A match is trusted at `verified` without an SMTP re-check —
+re-probing a catch-all domain would only return `catch_all` and discard
+the one thing Apollo knew that the domain's own server cannot supply —
+but still runs the same `_name_conflict` guard every other rung does,
+and only a recognized `email_status` becomes an address; an unfamiliar
+value degrades to a skip rather than trusting an unverified claim.
+Written from the documented request/response shape and untested until a
+real key exists, the same posture as the ZeroBounce and MillionVerifier
+adapters. `outreach_run.py verifiers` now shows whether a key is
+present; Apollo publishes no credits-remaining endpoint, so that row can
+only say ready or not, not how much is left. Cost, free tier: an
+Organization plan is required for the domain-wide roster; person
+enrichment is credit-capped by account type, work-email signups get a
+materially larger allowance than a personal one, which Yash's is.
