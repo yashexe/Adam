@@ -838,3 +838,25 @@ Spearman +0.96 with 18 of 22 inside the jitter band; the only
 roles still below their cached score by more than jitter are the PHP/Vue
 one (stack mismatch, 70→52) and the RL post-training one (42, vs 25
 cached — up, not down). The junior demotion is gone.
+
+**The ground-truth set, same day.** The postings that actually produced
+responses were re-judged against the new profile and the amended prompt,
+with the four anchors in the batch: the nine whose text survives (company-af,
+company-ag, company-ah, company-aj, company-ak, company-al, company-am,
+company-r, and the M&A-agents founding-engineer role that came in through a
+recruiter on 2026-09-02, judged 90 then) plus the high anchor itself
+(company-m). Prior → now: 92→85, 92→82, 92→88, 90→85, 90→87, 88→87,
+85→90, 85→86, 82→83, 70→63. Mean −3, nine of ten inside ±7, anchors
+88 / 51 / 5 / 80 all in band. Two edge crossings, both by exactly the
+jitter width or less: company-ag left the 85+ band (92→82, still far
+above the spend bar) and company-r crossed the 65 bar (70→63, the
+full-loop rejection that was 55 on partial text and 70 on full text). The
+top compressed slightly rather than reordering: three FDE roles outside
+fintech/healthtech now carry `domain: some` where the fintech and
+healthtech ones keep `strong`, which is the profile's sharper domain
+framing being read, not a seniority effect. Nothing in the set fell
+below 63. The scores that predicted engagement still predict it; the
+band edges are what they always were, ±7 wide. Not re-judgeable: the
+company-n, company-o, company-p, company-q and company-s postings, whose
+text was never saved (company-n's and company-p's have since closed on
+their boards).
