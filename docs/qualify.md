@@ -299,7 +299,7 @@ posting text where it exists:
 | company-ah, Forward Deployed Engineer | 90 | recruiter conversations — **three independent inbound reach-outs** (company-ah in-house and two unrelated agency recruiters) (live, added 2026-08-31) |
 | company-n, Forward Deployed Engineer | 88 | full loop, 3-hour NYC onsite |
 | company-aj, Forward Deployed Engineer | 88 | recruiter screen — inbound, recruiter reached out (live, added 2026-08-31) |
-| company-o, Full-Stack SWE (deployed) | 87 | live — technical round done, awaiting the next (as of 2026-09-02) |
+| company-o, Full-Stack SWE (deployed) | 87 | technical round completed, **rejected 2026-09-03** by the founder/CEO with no reason given — the second rejection from the 85+ band, and the deepest any process reached before failing |
 | company-p, Forward Deployed Engineer | 85 | screen + two team conversations, **rejected 2026-08-31** — the first rejection from the 85+ band |
 | company-al, Forward Deployed Engineer | 85 | intro call — inbound message 2026-08-27, awaiting next step (live, added 2026-08-31) |
 | company-am, Founding Engineer | 82 | **the pipeline's first end-to-end conversion.** Cold email 10:34 → CEO replied 12:31 introducing the engineering lead → 30-minute meeting booked 13:50, same day (live, added 2026-08-31) |
