@@ -686,33 +686,6 @@ def provider_status() -> list[dict]:
     rows.append({"provider": "hunter", "ready": bool(available),
                  "detail": note + " (reserved for the domain roster)"})
 
-    key = os.getenv("APOLLO_API_KEY")
-    if not key:
-        rows.append({"provider": "apollo", "ready": False,
-                     "detail": "no APOLLO_API_KEY in .env (resolution only, not a mailbox verifier)"})
-    else:
-        # A key existing is not the same as the endpoint being reachable:
-        # confirmed 2026-09-03 that Apollo's free plan returns a 403 for
-        # people/match specifically ("not included in your Free plan...
-        # even with a master key"), so a presence check alone would have
-        # reported this as ready when it never could answer. Apollo has no
-        # credits-remaining endpoint, so a real (free, harmless) probe call
-        # is the only way to know -- a plan-gate 403 is distinguished from
-        # every other failure so a transient error doesn't read as "needs
-        # a paid plan" when it's actually just offline for a moment.
-        probe = _apollo_match("Probe", "Readiness", "adam-readiness-check.invalid")
-        if isinstance(probe, str) and "not included in your" in probe:
-            rows.append({"provider": "apollo", "ready": False,
-                         "detail": "key present but the plan does not include people/match "
-                                   "(Organization/paid plan required for this endpoint)"})
-        elif isinstance(probe, str) and probe.startswith("apollo: HTTP"):
-            rows.append({"provider": "apollo", "ready": False, "detail": probe})
-        else:
-            # Any other outcome (a clean no-match, or an actual match) means
-            # the endpoint itself is reachable on this plan.
-            rows.append({"provider": "apollo", "ready": True,
-                         "detail": "key present and the endpoint answered; "
-                                   "Apollo has no credits-remaining endpoint to report"})
     return rows
 
 
@@ -896,111 +869,6 @@ def _candidate_addresses(
     return attempts, blocked
 
 
-# ── Apollo: a second address source, for the domains a probe cannot read ──
-# Added 2026-09-03. The keyless probe's real gap is catch-all and firewalled
-# domains -- measured live the same day: 7 of 8 companies above the spend
-# bar in one unattended run's daily budget were exactly that shape (Kalshi,
-# DeepL, TripleLift, GLG, Rocket Money, fuboTV, Industrious), and Hunter's
-# free quota was dead, so all eight parked with no address. Apollo's
-# person-enrichment endpoint (people/match) answers a different question
-# than a probe can: not "does this mailbox exist" but "what is this named
-# person's email, according to Apollo's own sourced data" -- so it works on
-# a catch-all domain precisely where nothing that relies on the domain's
-# own server can. Apollo's organization-search (a domain-wide roster, the
-# thing that would replace confirm_pattern outright) is paid-only; person
-# enrichment by name-plus-domain is on the free tier, credit-capped by
-# account type. Written from the documented request/response shape
-# (docs.apollo.io/reference/people-enrichment) and untested until a real
-# key exists -- smoke-test with one known-good name at a known domain when
-# the key is first added, the same way the ZeroBounce and MillionVerifier
-# adapters were.
-#
-# Costs a real Apollo credit on every call that finds an email, so it is
-# the last rung before giving up, after the free pattern, roster and probe
-# rungs have all failed -- never a first choice just because it exists.
-_APOLLO_MATCH_URL = "https://api.apollo.io/api/v1/people/match"
-
-# Apollo's own verdict on the email it returns. Only a status this specific
-# adapter recognizes as good becomes an address; anything else -- an
-# unfamiliar value, a future API change -- degrades to a skip rather than
-# trusting an unrecognized claim.
-_APOLLO_GOOD_STATUS = frozenset({"verified", "likely to engage", "guessed"})
-
-
-def _apollo_match(first: str, last: str, domain: str) -> tuple[str, dict] | str:
-    """(email, raw) on a match Apollo stands behind, or a skip string.
-    Cached per (domain, first, last) so a slate's alternates and a later
-    finalize re-check never spend a second credit on the same person --
-    checked before the key, like every other provider's cache, so a cached
-    answer survives the key later being removed or rotated."""
-    cache = _load_cache()
-    cache_key = f"apollo:{domain}:{first.lower()}:{last.lower()}"
-    if cache_key in cache:
-        entry = cache[cache_key]
-        if entry.get("email"):
-            return entry["email"], {**entry.get("raw", {}), "cached": True}
-        return f"apollo: {entry.get('reason', 'no match')} (cached)"
-    load_dotenv(ENV_PATH)
-    key = os.getenv("APOLLO_API_KEY")
-    if not key:
-        return "apollo: no APOLLO_API_KEY in .env"
-    try:
-        req = urllib.request.Request(
-            _APOLLO_MATCH_URL,
-            data=urllib.parse.urlencode({
-                "first_name": first, "last_name": last, "domain": domain,
-            }).encode(),
-            headers={"x-api-key": key, "Content-Type": "application/x-www-form-urlencoded",
-                    "Accept": "application/json"},
-            method="POST",
-        )
-        with urllib.request.urlopen(req, timeout=_TIMEOUT) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-    except urllib.error.HTTPError as exc:
-        try:
-            detail = json.loads(exc.read().decode("utf-8")).get("error", exc.reason)
-        except Exception:
-            detail = exc.reason
-        return f"apollo: HTTP {exc.code}: {detail}"
-    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError) as exc:
-        return f"apollo: {type(exc).__name__}: {exc}"
-
-    person = payload.get("person") or {}
-    email = person.get("email")
-    status = (person.get("email_status") or "").lower()
-    if not email or status not in _APOLLO_GOOD_STATUS:
-        reason = f"no confident match (status={status or 'none'})"
-        cache[cache_key] = {"email": None, "reason": reason, "cached_at": time.time()}
-        _save_cache(cache)
-        return f"apollo: {reason}"
-    cache[cache_key] = {"email": email, "raw": {"email_status": status}, "cached_at": time.time()}
-    _save_cache(cache)
-    return email, {"email_status": status}
-
-
-def _apollo_rung(
-    emails: list[dict], first: str, last: str, domain: str
-) -> tuple[str, VerificationResult] | str:
-    """The last resolution rung: a real, Apollo-sourced email for the named
-    person. Trusted as a verified address without an SMTP re-check --
-    re-probing on a catch-all domain would only get "catch_all" back and
-    throw away the one thing Apollo knew that a probe cannot. Still runs
-    the same wrong-person guard the pattern and roster rungs do."""
-    matched = _apollo_match(first, last, domain)
-    if isinstance(matched, str):
-        return matched
-    address, raw = matched
-    conflict = _name_conflict(emails, address, first, last)
-    if conflict:
-        return conflict
-    return address, VerificationResult(
-        email=address, label=VERIFIED,
-        reason=f"Apollo matched {first} {last} to this address "
-               f"(status: {raw.get('email_status', 'unknown')})",
-        raw=raw,
-    )
-
-
 def resolve_address(
     first: str, last: str, domain: str, *, fallback: str | None = None
 ) -> tuple[str | None, VerificationResult]:
@@ -1031,14 +899,6 @@ def resolve_address(
         tried.append(probed)
     else:
         return probed
-
-    # Apollo rung: costs a real credit, so only reached once every free
-    # rung (pattern, roster, probe) has already failed.
-    matched = _apollo_rung(emails, first, last, domain)
-    if isinstance(matched, str):
-        tried.append(matched)
-    else:
-        return matched
 
     if fallback and is_role_account(fallback):
         return None, VerificationResult(
@@ -1145,29 +1005,10 @@ def resolve_slate(
                     name, address, "probe", result.label, None, result.reason,
                 ))
                 continue
-            reason_so_far = (blocked + "; " if blocked else "") + probed
-            # Apollo costs a credit: only the first still-unresolved
-            # candidate in the slate may spend it, same discipline as
-            # have_verified already applies to paid verification below.
-            if have_verified:
-                out.append(SlateResolution(
-                    name, None, "", DEFERRED, None,
-                    "not tried yet; an Apollo lookup runs if this candidate "
-                    "is chosen" + fallback_note,
-                ))
-                continue
-            matched = _apollo_rung(emails, first, last, domain)
-            if isinstance(matched, str):
-                out.append(SlateResolution(
-                    name, None, "", UNVERIFIED, None,
-                    reason_so_far + "; " + matched + fallback_note,
-                ))
-            else:
-                address, result = matched
-                have_verified = True
-                out.append(SlateResolution(
-                    name, address, "apollo", result.label, None, result.reason,
-                ))
+            out.append(SlateResolution(
+                name, None, "", UNVERIFIED, None,
+                (blocked + "; " if blocked else "") + probed + fallback_note,
+            ))
             continue
 
         if have_verified:

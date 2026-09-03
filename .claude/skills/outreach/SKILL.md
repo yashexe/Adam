@@ -389,16 +389,15 @@ prepare, so nothing is ever researched twice.
   right now, and Hunter's reset date — run it before a drain. When
   Hunter's search quota is gone, resolution falls to the keyless probe
   automatically (source `probe`); the probe cannot read catch-all or
-  firewalled domains, which is most of the large companies that clear the
-  spend bar (measured 2026-09-03: 7 of 8 in one day). A last rung,
-  `APOLLO_API_KEY` in `.env`, would try Apollo's person-enrichment
-  endpoint for exactly those (source `apollo`), spent only once per
-  company. **Built but currently inert**: confirmed 2026-09-03 with a
-  real key that Apollo's `people/match` returns a 403 on the free plan —
-  "not included in your Free plan... even with a master key" — contrary
-  to what was believed when it was built. `outreach_run.py verifiers`
-  reports this plainly rather than as generic readiness. Live if the
-  plan is ever upgraded; a paid decision, not made. If nothing can answer, drafts land
+  firewalled domains, which is most of the large companies that clear
+  the spend bar (measured 2026-09-03: 7 of 8 in one day, all parked with
+  no address). A second address source (Apollo's person-enrichment
+  endpoint) was tried the same day and removed within the hour — its
+  free plan returns a 403 on the one endpoint that would have helped,
+  contrary to what every third-party source said. `docs/decisions.md`
+  has the full account. Nothing keyless can resolve a catch-all domain;
+  those companies park in `slates` for a human pick or wait on Hunter's
+  reset. If nothing can answer, drafts land
   labeled `unverified` — say so plainly in the report rather than
   treating it as verified.
 
